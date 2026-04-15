@@ -3,7 +3,7 @@ from typing import List
 from ..schemas import BuyerCreate, BuyerUpdate, BuyerResponse, BuyerLogin
 from ..controllers import BuyerController
 
-router = APIRouter(prefix="/buyers", tags=["Buyers"])
+router = APIRouter(prefix="/api/buyers", tags=["Buyers"])
 
 
 @router.post("/login", status_code=status.HTTP_200_OK)
@@ -16,19 +16,18 @@ def login_buyer(login_data: BuyerLogin):
     from ..utils.dependencies import _retry_get_or_none
     from fastapi import HTTPException
     
-    buyer = _retry_get_or_none(Buyer, email=login_data.email)
+    buyer = _retry_get_or_none(Buyer, phone_number=login_data.phone_number)
     
     if not buyer or not verify_password(login_data.password, buyer.password_hash):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Incorrect email or password"
+            detail="Incorrect phone number or password"
         )
     
     return {
         "uid": buyer.uid,
-        "name": buyer.name,
-        "email": buyer.email,
-        "contact_number": buyer.contact_number
+        "name": buyer.full_name,
+        "phone_number": buyer.phone_number
     }
 
 

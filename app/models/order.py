@@ -16,15 +16,21 @@ class Order(StructuredNode):
     uid = UniqueIdProperty()
     quantity = IntegerProperty(default=1)
     total_price = FloatProperty(required=True)
-    status = StringProperty(
-        default="pending",
+    order_status = StringProperty(
+        default="Pending",
         choices={
-            "pending": "Pending",
-            "confirmed": "Confirmed",
-            "processing": "Processing",
-            "shipped": "Shipped",
-            "delivered": "Delivered",
-            "cancelled": "Cancelled"
+            "Pending": "Pending",
+            "Confirmed": "Confirmed",
+            "Cancelled": "Cancelled",
+            "Delivered": "Delivered"
+        }
+    )
+    
+    payment_method = StringProperty(
+        required=True,
+        choices={
+            "Cash on Delivery": "Cash on Delivery",
+            "Meet Up / Cash on Pick-up": "Meet Up / Cash on Pick-up"
         }
     )
     
@@ -34,14 +40,9 @@ class Order(StructuredNode):
     # Relationships
     buyer = RelationshipTo('app.models.buyer.Buyer', 'PLACED_BY')
     seller = RelationshipTo('app.models.seller.Seller', 'FULFILLED_BY')
-    fish_product = RelationshipTo('app.models.fish_product.FishProduct', 'CONTAINS')
+    farm_product = RelationshipTo('app.models.farm_product.FarmProduct', 'CONTAINS')
     
     def update_timestamp(self):
         """Update the updated_at timestamp"""
         self.updated_at = datetime.utcnow()
         self.save()
-    
-    def update_status(self, new_status: str):
-        """Update order status"""
-        self.status = new_status
-        self.update_timestamp()

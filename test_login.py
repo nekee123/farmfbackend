@@ -11,8 +11,7 @@ def test_buyer_signup_and_login():
     print("\n=== Testing Buyer Signup ===")
     signup_data = {
         "name": "Login Test Buyer",
-        "email": "loginbuyer@test.com",
-        "contact_number": "09123456789",
+        "phone_number": "+63987654323",
         "password": "testpass123"
     }
     response = requests.post(f"{BASE_URL}/buyers/", json=signup_data)
@@ -24,7 +23,7 @@ def test_buyer_signup_and_login():
         # Now test login
         print("\n=== Testing Buyer Login ===")
         login_data = {
-            "email": "loginbuyer@test.com",
+            "phone_number": "+63987654323",
             "password": "testpass123"
         }
         login_response = requests.post(f"{BASE_URL}/buyers/login", json=login_data)
@@ -46,8 +45,7 @@ def test_seller_signup_and_login():
     print("\n=== Testing Seller Signup ===")
     signup_data = {
         "name": "Login Test Seller",
-        "email": "loginseller@test.com",
-        "contact_number": "09987654321",
+        "phone_number": "+63987654324",
         "password": "testpass123"
     }
     response = requests.post(f"{BASE_URL}/sellers/", json=signup_data)
@@ -59,7 +57,7 @@ def test_seller_signup_and_login():
         # Now test login
         print("\n=== Testing Seller Login ===")
         login_data = {
-            "email": "loginseller@test.com",
+            "phone_number": "+63987654324",
             "password": "testpass123"
         }
         login_response = requests.post(f"{BASE_URL}/sellers/login", json=login_data)
@@ -80,13 +78,13 @@ def test_wrong_credentials():
     """Test login with wrong credentials"""
     print("\n=== Testing Wrong Credentials ===")
     login_data = {
-        "email": "loginbuyer@test.com",
+        "phone_number": "+63987654323",
         "password": "wrongpassword"
     }
     response = requests.post(f"{BASE_URL}/buyers/login", json=login_data)
     print(f"Status: {response.status_code}")
     if response.status_code == 401:
-        print("✅ Correctly rejected wrong password")
+        print(" Correctly rejected wrong password")
         return True
     else:
         print(f"❌ Unexpected response: {response.text}")

@@ -11,8 +11,7 @@ def test_create_buyer():
     print("\n=== Testing Buyer Creation ===")
     data = {
         "name": "Test Buyer",
-        "email": "testbuyer@example.com",
-        "contact_number": "09123456789",
+        "phone_number": "+63987654327",
         "password": "testpass123"
     }
     response = requests.post(f"{BASE_URL}/buyers/", json=data)
@@ -29,8 +28,7 @@ def test_update_buyer(buyer_uid):
     """Test buyer profile update"""
     print("\n=== Testing Buyer Profile Update ===")
     data = {
-        "name": "Updated Buyer Name",
-        "contact_number": "09987654321"
+        "name": "Updated Buyer Name"
     }
     response = requests.patch(f"{BASE_URL}/buyers/{buyer_uid}", json=data)
     print(f"Status: {response.status_code}")
@@ -45,8 +43,7 @@ def test_create_seller():
     print("\n=== Testing Seller Creation ===")
     data = {
         "name": "Test Seller",
-        "email": "testseller@example.com",
-        "contact_number": "09111222333",
+        "phone_number": "+63987654328",
         "password": "testpass123"
     }
     response = requests.post(f"{BASE_URL}/sellers/", json=data)
@@ -63,8 +60,7 @@ def test_update_seller(seller_uid):
     """Test seller profile update"""
     print("\n=== Testing Seller Profile Update ===")
     data = {
-        "name": "Updated Seller Name",
-        "contact_number": "09888777666"
+        "name": "Updated Seller Name"
     }
     response = requests.patch(f"{BASE_URL}/sellers/{seller_uid}", json=data)
     print(f"Status: {response.status_code}")
@@ -104,8 +100,8 @@ def test_create_order(buyer_uid, seller_uid, product_uid, product_name, price):
         "buyer_name": "Test Buyer",
         "seller_uid": seller_uid,
         "seller_name": "Test Seller",
-        "fish_product_uid": product_uid,
-        "fish_product_name": product_name,
+        "farm_product_uid": product_uid,
+        "farm_product_name": product_name,
         "quantity": 1,
         "total_price": price
     }
@@ -122,7 +118,7 @@ def test_create_order(buyer_uid, seller_uid, product_uid, product_name, price):
 
 def main():
     print("=" * 50)
-    print("IsdaMarket API Endpoint Tests")
+    print("FarmFresh Connect API Endpoint Tests")
     print("=" * 50)
     
     # Test buyer endpoints

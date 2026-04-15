@@ -1,4 +1,4 @@
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel
 
 
 class Token(BaseModel):
@@ -8,5 +8,5 @@ class Token(BaseModel):
 
 class TokenData(BaseModel):
     uid: str
-    email: EmailStr
+    phone_number: str
     user_type: str  # "buyer" or "seller"

@@ -8,11 +8,13 @@ from .database import init_database, close_database
 from .routes import (
     seller_router,
     buyer_router,
-    fish_product_router,
+    farm_product_router,
     order_router,
     notification_router,
     message_router,
-    review_router
+    review_router,
+    cart_router,
+    admin_router
 )
 from .config import settings
 
@@ -21,9 +23,9 @@ load_dotenv()
 
 # Initialize FastAPI app
 app = FastAPI(
-    title="IsdaMarket",
+    title="FarmFresh Connect",
     version="1.0.0",
-    description="A Fish Marketplace",
+    description="A Farm Product Marketplace",
     docs_url="/docs",
     redoc_url="/redoc"
 )
@@ -32,16 +34,21 @@ app = FastAPI(
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
-        "https://isdamarket-frontend.onrender.com",  # Production frontend
-        "http://localhost:3000",  # Local development
+        "https://farmfresh-connect-frontend.onrender.com",  # Production frontend
+        "http://localhost:5000",  # Local development
         "http://127.0.0.1:3000",  # Local development alternative
-        "*"  # Fallback for any other origins (can be removed in strict production)
+        "http://localhost:55030",  # Flutter web dev server
+        "http://127.0.0.1:55030",  # Flutter web dev server alternative
+        "http://localhost:50257",
+        "http://localhost:58931",
+
     ],
+    allow_origin_regex=r"^https?://(localhost|127\.0\.0\.1)(:\d+)?$",  # Allow any localhost port
     allow_credentials=True,
     allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"],
-    allow_headers=["*"],
+    allow_headers=["Content-Type", "Authorization", "Accept"],
     expose_headers=["*"],
-    max_age=3600,  # Cache preflight requests for 1 hour
+    max_age=3600,
 )
 
 # ✅ Neo4j Aura Connection
@@ -78,7 +85,7 @@ def search_items(query: str = Query(...), search_type: str = Query(...)):
     with driver.session() as session:
         if search_type == "products":
             cypher = """
-            MATCH (p:FishProduct)
+            MATCH (p:FarmProduct)
             WHERE toLower(p.name) CONTAINS toLower($query)
             RETURN p.uid AS id, p.name AS name, p.price AS price, p.type AS location
             LIMIT 10
@@ -105,11 +112,13 @@ def search_items(query: str = Query(...), search_type: str = Query(...)):
 # Include routers
 app.include_router(seller_router)
 app.include_router(buyer_router)
-app.include_router(fish_product_router)
+app.include_router(farm_product_router)
 app.include_router(order_router)
 app.include_router(notification_router)
 app.include_router(message_router)
 app.include_router(review_router)
+app.include_router(cart_router)
+app.include_router(admin_router)
 
 if __name__ == "__main__":
     import uvicorn

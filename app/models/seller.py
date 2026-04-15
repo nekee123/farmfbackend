@@ -3,8 +3,7 @@ from neomodel import (
     StringProperty,
     UniqueIdProperty,
     DateTimeProperty,
-    RelationshipFrom,
-    EmailProperty
+    RelationshipFrom
 )
 from datetime import datetime
 
@@ -14,8 +13,7 @@ class Seller(StructuredNode):
     
     uid = UniqueIdProperty()
     name = StringProperty(required=True, index=True)
-    email = EmailProperty(required=True, unique_index=True)
-    contact_number = StringProperty(required=True)
+    phone_number = StringProperty(required=True, unique_index=True)
     location = StringProperty(default="")  # Seller's location
     password_hash = StringProperty(required=True)
     profile_picture = StringProperty(default="")  # Base64 encoded image
@@ -25,7 +23,7 @@ class Seller(StructuredNode):
     
     # Relationships
     # Use fully-qualified paths to avoid neomodel resolving attributes on the wrong module
-    fish_products = RelationshipFrom('app.models.fish_product.FishProduct', 'SOLD_BY')
+    farm_products = RelationshipFrom('app.models.farm_product.FarmProduct', 'SOLD_BY')
     orders = RelationshipFrom('app.models.order.Order', 'FULFILLED_BY')
     
     def update_timestamp(self):

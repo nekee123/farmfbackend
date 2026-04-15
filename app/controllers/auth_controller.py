@@ -11,19 +11,19 @@ class AuthController:
     @staticmethod
     def login_buyer(login_data: BuyerLogin) -> Token:
         """Authenticate buyer and return JWT token"""
-        buyer = _retry_get_or_none(Buyer, email=login_data.email)
+        buyer = _retry_get_or_none(Buyer, phone_number=login_data.phone_number)
         
         if not buyer or not verify_password(login_data.password, buyer.password_hash):
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Incorrect email or password"
+                detail="Incorrect phone number or password"
             )
         
         # Create access token
         access_token = create_access_token(
             data={
                 "uid": buyer.uid,
-                "email": buyer.email,
+                "phone_number": buyer.phone_number,
                 "user_type": "buyer"
             }
         )
@@ -33,19 +33,19 @@ class AuthController:
     @staticmethod
     def login_seller(login_data: SellerLogin) -> Token:
         """Authenticate seller and return JWT token"""
-        seller = _retry_get_or_none(Seller, email=login_data.email)
+        seller = _retry_get_or_none(Seller, phone_number=login_data.phone_number)
         
         if not seller or not verify_password(login_data.password, seller.password_hash):
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Incorrect email or password"
+                detail="Incorrect phone number or password"
             )
         
         # Create access token
         access_token = create_access_token(
             data={
                 "uid": seller.uid,
-                "email": seller.email,
+                "phone_number": seller.phone_number,
                 "user_type": "seller"
             }
         )

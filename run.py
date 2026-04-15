@@ -1,5 +1,5 @@
 """
-Quick start script for IsdaMarket API
+Quick start script for FarmFresh Connect API
 Run this file to start the development server
 """
 import uvicorn

@@ -3,8 +3,7 @@ from neomodel import (
     StringProperty,
     UniqueIdProperty,
     DateTimeProperty,
-    RelationshipFrom,
-    EmailProperty
+    RelationshipFrom
 )
 from datetime import datetime
 
@@ -13,9 +12,9 @@ class Buyer(StructuredNode):
     """Buyer node in Neo4j graph database"""
     
     uid = UniqueIdProperty()
-    name = StringProperty(required=True, index=True)
-    email = EmailProperty(required=True, unique_index=True)
-    contact_number = StringProperty(required=True)
+    full_name = StringProperty(required=True, index=True)
+    phone_number = StringProperty(required=True, unique_index=True)
+    location = StringProperty(default="")
     password_hash = StringProperty(required=True)
     profile_picture = StringProperty(default="")  # Base64 encoded image
     

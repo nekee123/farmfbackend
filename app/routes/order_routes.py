@@ -1,9 +1,9 @@
 from fastapi import APIRouter, status
 from typing import List
-from ..schemas import OrderCreate, OrderUpdate, OrderResponse
+from ..schemas import OrderCreate, OrderStatusUpdate, OrderResponse
 from ..controllers import OrderController
 
-router = APIRouter(prefix="/orders", tags=["Orders"])
+router = APIRouter(prefix="/api/orders", tags=["Orders"])
 
 
 @router.post("/", response_model=OrderResponse, status_code=status.HTTP_201_CREATED)
@@ -46,20 +46,15 @@ def get_order(order_uid: str):
     return OrderController.get_order(order_uid)
 
 
-@router.patch("/{order_uid}", response_model=OrderResponse)
-def update_order_status(order_uid: str, order_data: OrderUpdate):
+@router.patch("/{order_uid}/status", status_code=status.HTTP_200_OK)
+def update_order_status(order_uid: str, status_data: OrderStatusUpdate):
     """
-    Update order status
+    Update order status to Delivered only
     
-    Available statuses:
-    - pending
-    - confirmed
-    - processing
-    - shipped
-    - delivered
-    - cancelled
+    This endpoint only allows changing status to "Delivered".
+    Prevents changing back to "Pending".
     """
-    return OrderController.update_order_status(order_uid, order_data)
+    return OrderController.update_order_status(order_uid, status_data)
 
 
 @router.delete("/{order_uid}", status_code=status.HTTP_200_OK)

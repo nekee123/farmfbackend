@@ -5,7 +5,7 @@ from datetime import datetime
 from ..database import get_db
 import uuid
 
-router = APIRouter(prefix="/messages", tags=["Messages"])
+router = APIRouter(prefix="/api/messages", tags=["Messages"])
 
 # Pydantic models
 class MessageCreate(BaseModel):

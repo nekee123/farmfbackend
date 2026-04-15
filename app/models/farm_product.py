@@ -11,16 +11,17 @@ from neomodel import (
 from datetime import datetime
 
 
-class FishProduct(StructuredNode):
-    """Fish Product node in Neo4j graph database"""
+class FarmProduct(StructuredNode):
+    """Farm Product node in Neo4j graph database"""
     
     uid = UniqueIdProperty()
     name = StringProperty(required=True, index=True)
-    type = StringProperty(required=True, index=True)  # e.g., "Freshwater", "Saltwater", "Shellfish"
+    type = StringProperty(required=True, index=True)  # e.g., "Vegetables", "Fruits", "Dairy", "Grains"
     price = FloatProperty(required=True)
     quantity = IntegerProperty(default=0)
     description = StringProperty(default="")
     image = StringProperty(default="")  # Base64 encoded image
+    payment_methods = StringProperty(default="CASH_ON_DELIVERY,MEET_UP_CASH_ON_PICKUP")  # Comma-separated payment methods
     
     created_at = DateTimeProperty(default_now=True)
     updated_at = DateTimeProperty(default_now=True)

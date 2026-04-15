@@ -5,7 +5,7 @@ from pydantic import Field
 class Settings(BaseSettings):
     """Application settings loaded from environment variables"""
     
-    app_name: str = Field(default="IsdaMarket")
+    app_name: str = Field(default="FarmFresh Connect")
     app_version: str = Field(default="1.0.0")
     
     # Neo4j Aura connection

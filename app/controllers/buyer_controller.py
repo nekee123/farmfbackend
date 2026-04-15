@@ -14,19 +14,19 @@ class BuyerController:
     @staticmethod
     def create_buyer(buyer_data: BuyerCreate) -> BuyerResponse:
         """Create a new buyer"""
-        # Check if email already exists
-        existing_buyer = Buyer.nodes.get_or_none(email=buyer_data.email)
+        # Check if phone number already exists
+        existing_buyer = Buyer.nodes.get_or_none(phone_number=buyer_data.phone_number)
         if existing_buyer:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Email already registered"
+                detail="Phone number already registered"
             )
         
         # Create new buyer
         buyer = Buyer(
-            name=buyer_data.name,
-            email=buyer_data.email,
-            contact_number=buyer_data.contact_number,
+            full_name=buyer_data.full_name,
+            phone_number=buyer_data.phone_number,
+            location=buyer_data.location or "",
             password_hash=get_password_hash(buyer_data.password)
         ).save()
         
@@ -46,12 +46,12 @@ class BuyerController:
     @staticmethod
     def get_all_buyers() -> List[BuyerResponse]:
         """Get all buyers"""
-        # Return only buyers with valid email formats to avoid neomodel inflate errors
+        # Return only buyers with valid phone number formats
         query = """
         MATCH (b:Buyer)
-        WHERE b.email =~ '[^@]+@[^@]+\\.[^@]+'
-        RETURN b.uid AS uid, b.name AS name, b.email AS email,
-               b.contact_number AS contact_number, b.created_at AS created_at,
+        WHERE b.phone_number =~ '09[0-9]{9}'
+        RETURN b.uid AS uid, b.full_name AS full_name, b.phone_number AS phone_number,
+               b.location AS location, b.profile_picture AS profile_picture, b.created_at AS created_at,
                b.updated_at AS updated_at
         ORDER BY b.created_at DESC
         """
@@ -75,11 +75,12 @@ class BuyerController:
         for row in results:
             buyers.append({
                 "uid": row[0],
-                "name": row[1],
-                "email": row[2],
-                "contact_number": row[3],
-                "created_at": row[4],
-                "updated_at": row[5],
+                "full_name": row[1],
+                "phone_number": row[2],
+                "location": row[3],
+                "profile_picture": row[4],
+                "created_at": row[5],
+                "updated_at": row[6],
             })
 
         return buyers
@@ -110,19 +111,19 @@ class BuyerController:
             )
         
         # Update fields if provided
-        if buyer_data.name is not None:
-            buyer.name = buyer_data.name
-        if buyer_data.email is not None:
-            # Check if new email already exists
-            existing = Buyer.nodes.get_or_none(email=buyer_data.email)
+        if buyer_data.full_name is not None:
+            buyer.full_name = buyer_data.full_name
+        if buyer_data.phone_number is not None:
+            # Check if new phone number already exists
+            existing = Buyer.nodes.get_or_none(phone_number=buyer_data.phone_number)
             if existing and existing.uid != buyer_uid:
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST,
-                    detail="Email already in use"
+                    detail="Phone number already in use"
                 )
-            buyer.email = buyer_data.email
-        if buyer_data.contact_number is not None:
-            buyer.contact_number = buyer_data.contact_number
+            buyer.phone_number = buyer_data.phone_number
+        if buyer_data.location is not None:
+            buyer.location = buyer_data.location
         if buyer_data.password is not None:
             buyer.password_hash = get_password_hash(buyer_data.password)
         if buyer_data.profile_picture is not None:
@@ -149,9 +150,9 @@ class BuyerController:
         """Convert Buyer model to response schema"""
         return BuyerResponse(
             uid=buyer.uid,
-            name=buyer.name,
-            email=buyer.email,
-            contact_number=buyer.contact_number,
+            full_name=buyer.full_name,
+            phone_number=buyer.phone_number,
+            location=buyer.location if hasattr(buyer, 'location') else "",
             profile_picture=buyer.profile_picture if hasattr(buyer, 'profile_picture') else "",
             created_at=buyer.created_at,
             updated_at=buyer.updated_at

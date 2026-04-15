@@ -5,7 +5,7 @@ from datetime import datetime
 from ..database import get_db
 import uuid
 
-router = APIRouter(prefix="/notifications", tags=["Notifications"])
+router = APIRouter(prefix="/api/notifications", tags=["Notifications"])
 
 # Pydantic models
 class NotificationCreate(BaseModel):

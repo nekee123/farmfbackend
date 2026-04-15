@@ -3,7 +3,7 @@ from typing import List
 from ..schemas import SellerCreate, SellerUpdate, SellerResponse, SellerLogin
 from ..controllers import SellerController
 
-router = APIRouter(prefix="/sellers", tags=["Sellers"])
+router = APIRouter(prefix="/api/sellers", tags=["Sellers"])
 
 
 @router.post("/login", status_code=status.HTTP_200_OK)
@@ -16,19 +16,18 @@ def login_seller(login_data: SellerLogin):
     from ..utils.dependencies import _retry_get_or_none
     from fastapi import HTTPException
     
-    seller = _retry_get_or_none(Seller, email=login_data.email)
+    seller = _retry_get_or_none(Seller, phone_number=login_data.phone_number)
     
     if not seller or not verify_password(login_data.password, seller.password_hash):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Incorrect email or password"
+            detail="Incorrect phone number or password"
         )
     
     return {
         "uid": seller.uid,
         "name": seller.name,
-        "email": seller.email,
-        "contact_number": seller.contact_number
+        "phone_number": seller.phone_number
     }
 
 
@@ -72,3 +71,27 @@ def delete_seller(seller_uid: str):
     Delete seller
     """
     return SellerController.delete_seller(seller_uid)
+
+
+@router.get("/{seller_uid}/rating")
+def get_seller_rating(seller_uid: str):
+    """
+    Get seller rating summary (average rating and review count)
+    """
+    from ..models import Seller
+    from ..utils.dependencies import _retry_get_or_none
+    from fastapi import HTTPException
+    
+    # Check if seller exists
+    seller = _retry_get_or_none(Seller, uid=seller_uid)
+    if not seller:
+        raise HTTPException(status_code=404, detail="Seller not found")
+    
+    # For now, return default rating (you can implement review system later)
+    return {
+        "seller_uid": seller_uid,
+        "average_rating": 0.0,
+        "review_count": 0,
+        "name": seller.name,
+        "location": seller.location
+    }

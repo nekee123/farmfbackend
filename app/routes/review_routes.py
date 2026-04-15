@@ -5,7 +5,7 @@ from datetime import datetime
 from ..database import get_db
 import uuid
 
-router = APIRouter(prefix="/reviews", tags=["Reviews"])
+router = APIRouter(prefix="/api/reviews", tags=["Reviews"])
 
 # Pydantic models
 class ReviewCreate(BaseModel):
@@ -13,6 +13,9 @@ class ReviewCreate(BaseModel):
     buyer_name: str
     seller_uid: str
     order_uid: str
+    # Optional: the Flutter app sends this as farm_product_uid/product_uid.
+    # We keep it optional and primarily derive product info from the order graph.
+    product_uid: Optional[str] = None
     rating: int
     comment: Optional[str] = ""
 
@@ -20,11 +23,15 @@ class ReviewResponse(BaseModel):
     uid: str
     buyer_uid: str
     buyer_name: str
+    buyer_profile_picture: Optional[str] = None
     seller_uid: str
     order_uid: str
+    product_uid: Optional[str] = None
+    product_name: Optional[str] = None
     rating: int
     comment: str
     created_at: str
+    updated_at: str
 
 # Submit review
 @router.post("/", response_model=ReviewResponse)
@@ -42,7 +49,33 @@ def submit_review(review: ReviewCreate):
             raise HTTPException(status_code=400, detail="Review already submitted for this order")
         
         review_uid = str(uuid.uuid4())
-        created_at = datetime.utcnow().isoformat()
+        now = datetime.utcnow().isoformat()
+
+        # Derive buyer profile picture + product info from the graph (best-effort).
+        # This prevents frontend parsing issues when these fields are missing.
+        derive_query = """
+        MATCH (o:Order {uid: $order_uid})
+        OPTIONAL MATCH (o)-[:CONTAINS]->(p:FarmProduct)
+        OPTIONAL MATCH (b:Buyer {uid: $buyer_uid})
+        RETURN
+          p.uid AS product_uid,
+          p.name AS product_name,
+          b.profile_picture AS buyer_profile_picture
+        """
+        derived = session.run(
+            derive_query,
+            {"order_uid": review.order_uid, "buyer_uid": review.buyer_uid},
+        ).single()
+
+        derived_product_uid = None
+        derived_product_name = None
+        derived_buyer_profile_picture = None
+        if derived:
+            derived_product_uid = derived.get("product_uid")
+            derived_product_name = derived.get("product_name")
+            derived_buyer_profile_picture = derived.get("buyer_profile_picture")
+
+        final_product_uid = derived_product_uid or review.product_uid
         
         # Create review
         create_query = """
@@ -50,26 +83,37 @@ def submit_review(review: ReviewCreate):
             uid: $uid,
             buyer_uid: $buyer_uid,
             buyer_name: $buyer_name,
+            buyer_profile_picture: $buyer_profile_picture,
             seller_uid: $seller_uid,
             order_uid: $order_uid,
+            product_uid: $product_uid,
+            product_name: $product_name,
             rating: $rating,
             comment: $comment,
-            created_at: $created_at
+            created_at: $created_at,
+            updated_at: $updated_at
         })
         RETURN r.uid AS uid, r.buyer_uid AS buyer_uid, r.buyer_name AS buyer_name,
+               r.buyer_profile_picture AS buyer_profile_picture,
                r.seller_uid AS seller_uid, r.order_uid AS order_uid,
-               r.rating AS rating, r.comment AS comment, r.created_at AS created_at
+               r.product_uid AS product_uid, r.product_name AS product_name,
+               r.rating AS rating, r.comment AS comment,
+               r.created_at AS created_at, r.updated_at AS updated_at
         """
         
         result = session.run(create_query, {
             "uid": review_uid,
             "buyer_uid": review.buyer_uid,
             "buyer_name": review.buyer_name,
+            "buyer_profile_picture": derived_buyer_profile_picture,
             "seller_uid": review.seller_uid,
             "order_uid": review.order_uid,
+            "product_uid": final_product_uid,
+            "product_name": derived_product_name,
             "rating": review.rating,
             "comment": review.comment,
-            "created_at": created_at
+            "created_at": now,
+            "updated_at": now,
         })
         
         record = result.single()
@@ -94,7 +138,7 @@ def submit_review(review: ReviewCreate):
             "uid": notif_uid,
             "seller_uid": review.seller_uid,
             "message": notif_message,
-            "created_at": created_at
+            "created_at": now
         })
         
         # Update seller's average rating
@@ -111,11 +155,15 @@ def submit_review(review: ReviewCreate):
             "uid": record["uid"],
             "buyer_uid": record["buyer_uid"],
             "buyer_name": record["buyer_name"],
+            "buyer_profile_picture": record.get("buyer_profile_picture"),
             "seller_uid": record["seller_uid"],
             "order_uid": record["order_uid"],
+            "product_uid": record.get("product_uid"),
+            "product_name": record.get("product_name"),
             "rating": record["rating"],
             "comment": record["comment"],
-            "created_at": record["created_at"]
+            "created_at": record["created_at"],
+            "updated_at": record.get("updated_at") or record["created_at"],
         }
 
 # Get reviews for a seller
@@ -127,8 +175,11 @@ def get_seller_reviews(seller_uid: str):
         query = """
         MATCH (r:Review {seller_uid: $seller_uid})
         RETURN r.uid AS uid, r.buyer_uid AS buyer_uid, r.buyer_name AS buyer_name,
+               r.buyer_profile_picture AS buyer_profile_picture,
                r.seller_uid AS seller_uid, r.order_uid AS order_uid,
-               r.rating AS rating, r.comment AS comment, r.created_at AS created_at
+               r.product_uid AS product_uid, r.product_name AS product_name,
+               r.rating AS rating, r.comment AS comment,
+               r.created_at AS created_at, r.updated_at AS updated_at
         ORDER BY r.created_at DESC
         """
         result = session.run(query, {"seller_uid": seller_uid})
@@ -138,11 +189,15 @@ def get_seller_reviews(seller_uid: str):
                 "uid": record["uid"],
                 "buyer_uid": record["buyer_uid"],
                 "buyer_name": record["buyer_name"],
+                "buyer_profile_picture": record.get("buyer_profile_picture"),
                 "seller_uid": record["seller_uid"],
                 "order_uid": record["order_uid"],
+                "product_uid": record.get("product_uid"),
+                "product_name": record.get("product_name"),
                 "rating": record["rating"],
                 "comment": record["comment"],
-                "created_at": record["created_at"]
+                "created_at": record["created_at"],
+                "updated_at": record.get("updated_at") or record["created_at"],
             })
         return reviews
 

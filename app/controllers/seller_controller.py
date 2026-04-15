@@ -14,19 +14,18 @@ class SellerController:
     @staticmethod
     def create_seller(seller_data: SellerCreate) -> SellerResponse:
         """Create a new seller"""
-        # Check if email already exists
-        existing_seller = Seller.nodes.get_or_none(email=seller_data.email)
+        # Check if phone number already exists
+        existing_seller = Seller.nodes.get_or_none(phone_number=seller_data.phone_number)
         if existing_seller:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Email already registered"
+                detail="Phone number already registered"
             )
         
         # Create new seller
         seller = Seller(
             name=seller_data.name,
-            email=seller_data.email,
-            contact_number=seller_data.contact_number,
+            phone_number=seller_data.phone_number,
             location=seller_data.location or "",
             password_hash=get_password_hash(seller_data.password)
         ).save()
@@ -47,12 +46,12 @@ class SellerController:
     @staticmethod
     def get_all_sellers() -> List[SellerResponse]:
         """Get all sellers"""
-        # Return only sellers with valid email format to avoid neomodel inflate errors
+        # Return only sellers with valid phone number format
         query = """
         MATCH (s:Seller)
-        WHERE s.email =~ '[^@]+@[^@]+\\.[^@]+'
-        RETURN s.uid AS uid, s.name AS name, s.email AS email,
-               s.contact_number AS contact_number, s.location AS location,
+        WHERE s.phone_number =~ '09[0-9]{9}'
+        RETURN s.uid AS uid, s.name AS name, s.phone_number AS phone_number,
+               s.location AS location, s.profile_picture AS profile_picture,
                s.created_at AS created_at, s.updated_at AS updated_at
         ORDER BY s.created_at DESC
         """
@@ -77,9 +76,9 @@ class SellerController:
             sellers.append({
                 "uid": row[0],
                 "name": row[1],
-                "email": row[2],
-                "contact_number": row[3],
-                "location": row[4] or "",
+                "phone_number": row[2],
+                "location": row[3] or "",
+                "profile_picture": row[4],
                 "created_at": row[5],
                 "updated_at": row[6],
             })
@@ -103,17 +102,15 @@ class SellerController:
         # Update fields if provided
         if seller_data.name is not None:
             seller.name = seller_data.name
-        if seller_data.email is not None:
-            # Check if new email already exists
-            existing = Seller.nodes.get_or_none(email=seller_data.email)
+        if seller_data.phone_number is not None:
+            # Check if new phone number already exists
+            existing = Seller.nodes.get_or_none(phone_number=seller_data.phone_number)
             if existing and existing.uid != seller_uid:
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST,
-                    detail="Email already in use"
+                    detail="Phone number already in use"
                 )
-            seller.email = seller_data.email
-        if seller_data.contact_number is not None:
-            seller.contact_number = seller_data.contact_number
+            seller.phone_number = seller_data.phone_number
         if seller_data.location is not None:
             seller.location = seller_data.location
         if seller_data.password is not None:
@@ -143,8 +140,7 @@ class SellerController:
         return SellerResponse(
             uid=seller.uid,
             name=seller.name,
-            email=seller.email,
-            contact_number=seller.contact_number,
+            phone_number=seller.phone_number,
             location=seller.location if hasattr(seller, 'location') else "",
             profile_picture=seller.profile_picture if hasattr(seller, 'profile_picture') else "",
             created_at=seller.created_at,

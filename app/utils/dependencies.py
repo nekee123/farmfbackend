@@ -1,6 +1,6 @@
 from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
-from ..models import Buyer, Seller
+from ..models import Buyer, Seller, Admin
 from .security import decode_access_token
 from neo4j import exceptions as neo4j_exceptions
 import time
@@ -74,3 +74,56 @@ def _retry_get_or_none(model_class, **kwargs):
     # If we got here, raise a HTTPException to be handled by caller context
     raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
                         detail="Database unavailable, please try again later") from last_exc
+
+
+def get_current_admin(token: str = Depends(oauth2_scheme)) -> Admin:
+    """Get current authenticated admin"""
+    credentials_exception = HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="Could not validate credentials",
+        headers={"WWW-Authenticate": "Bearer"},
+    )
+    
+    try:
+        payload = decode_access_token(token)
+        uid: str = payload.get("sub")
+        username: str = payload.get("username")
+        role: str = payload.get("role")
+        
+        if uid is None or username is None or role is None:
+            raise credentials_exception
+        
+        admin = _retry_get_or_none(Admin, uid=uid)
+        if admin is None:
+            raise credentials_exception
+        
+        return admin
+    except ValueError:
+        raise credentials_exception
+
+
+def get_admin_from_token(token: str) -> Admin:
+    """Get admin from token (for login endpoint)"""
+    try:
+        payload = decode_access_token(token)
+        uid: str = payload.get("sub")
+        
+        if uid is None:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Invalid token"
+            )
+        
+        admin = _retry_get_or_none(Admin, uid=uid)
+        if admin is None:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Admin not found"
+            )
+        
+        return admin
+    except ValueError:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid token"
+        )
