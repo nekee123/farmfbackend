@@ -57,12 +57,15 @@ class AdminUpdate(BaseModel):
         return v
 
 
-class AdminResponse(AdminBase):
+class AdminResponse(BaseModel):
     uid: str
+    phone_number: str
+    full_name: str
+    role: str
+    location: Optional[str] = None
     created_at: datetime
     updated_at: datetime
-    last_login: Optional[datetime] = None
-    
+
     class Config:
         from_attributes = True
 

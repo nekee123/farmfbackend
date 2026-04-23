@@ -6,8 +6,8 @@ from neo4j import GraphDatabase
 import os
 from .database import init_database, close_database
 from .routes import (
-    seller_router,
-    buyer_router,
+    auth_router,
+    user_router,
     farm_product_router,
     order_router,
     notification_router,
@@ -23,9 +23,9 @@ load_dotenv()
 
 # Initialize FastAPI app
 app = FastAPI(
-    title="FarmFresh Connect",
-    version="1.0.0",
-    description="A Farm Product Marketplace",
+    title="🌾 FarmFresh Connect",
+    version="2.0.0",
+    description="A Farm-to-Market Platform with Unified RBAC Authentication",
     docs_url="/docs",
     redoc_url="/redoc"
 )
@@ -39,7 +39,7 @@ app.add_middleware(
         "http://127.0.0.1:3000",  # Local development alternative
         "http://localhost:55030",  # Flutter web dev server
         "http://127.0.0.1:55030",  # Flutter web dev server alternative
-        "http://localhost:50257",
+        "http://localhost:62333",
         "http://localhost:58931",
 
     ],
@@ -76,11 +76,11 @@ async def redirect_to_docs():
     """Redirect root URL to Swagger docs"""
     return RedirectResponse(url="/docs")
 
-# ✅ SEARCH ROUTE
+# ✅ SEARCH ROUTE (Updated for User model)
 @app.get("/search")
 def search_items(query: str = Query(...), search_type: str = Query(...)):
     """
-    Search for products, sellers, or buyers by name.
+    Search for products, sellers, or buyers by name using unified User model.
     """
     with driver.session() as session:
         if search_type == "products":
@@ -92,16 +92,16 @@ def search_items(query: str = Query(...), search_type: str = Query(...)):
             """
         elif search_type == "sellers":
             cypher = """
-            MATCH (s:Seller)
-            WHERE toLower(s.name) CONTAINS toLower($query)
-            RETURN s.uid AS id, s.name AS name, s.location AS location
+            MATCH (u:User {role: 'seller'})
+            WHERE toLower(u.full_name) CONTAINS toLower($query)
+            RETURN u.uid AS id, u.full_name AS name, u.location AS location
             LIMIT 10
             """
         else:
             cypher = """
-            MATCH (b:Buyer)
-            WHERE toLower(b.name) CONTAINS toLower($query)
-            RETURN b.uid AS id, b.name AS name, b.location AS location
+            MATCH (u:User {role: 'buyer'})
+            WHERE toLower(u.full_name) CONTAINS toLower($query)
+            RETURN u.uid AS id, u.full_name AS name, u.location AS location
             LIMIT 10
             """
 
@@ -109,9 +109,9 @@ def search_items(query: str = Query(...), search_type: str = Query(...)):
         items = [dict(record) for record in results]
         return items
 
-# Include routers
-app.include_router(seller_router)
-app.include_router(buyer_router)
+# Include routers (using unified auth routes, removed old buyer/seller routes)
+app.include_router(auth_router)
+app.include_router(user_router)
 app.include_router(farm_product_router)
 app.include_router(order_router)
 app.include_router(notification_router)

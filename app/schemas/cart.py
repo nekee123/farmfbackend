@@ -18,7 +18,6 @@ class ProductInfo(BaseModel):
 
 
 class CartItemBase(BaseModel):
-    buyer_uid: str = Field(..., description="Buyer UID")
     product_uid: str = Field(..., description="Product UID")
     quantity: int = Field(..., gt=0, description="Quantity must be greater than 0")
 
@@ -33,10 +32,12 @@ class CartItemUpdate(BaseModel):
 
 class CartItemResponse(BaseModel):
     uid: str
+    buyer_uid: str
     product_uid: str
     quantity: int
     price_at_time: float
     created_at: datetime
+    updated_at: datetime
     product: Optional[ProductInfo] = None  # Include product details
     
     class Config:

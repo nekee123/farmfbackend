@@ -3,7 +3,7 @@ from fastapi import HTTPException, status
 from neomodel import db
 from neo4j import exceptions as neo4j_exceptions
 import time
-from ..models import Cart, CartItem, Buyer, FarmProduct
+from ..models import Cart, CartItem, User, FarmProduct
 from ..schemas import CartItemCreate, CartItemUpdate, CartResponse, CartItemResponse, CartSummary
 from ..utils.dependencies import _retry_get_or_none
 
@@ -47,9 +47,9 @@ class CartController:
     @staticmethod
     def add_item_to_cart(buyer_uid: str, item_data: CartItemCreate) -> CartItemResponse:
         """Add item to cart"""
-        # Verify buyer exists
-        buyer = _retry_get_or_none(Buyer, uid=buyer_uid)
-        if not buyer:
+        # Verify buyer exists (using User model with role='buyer')
+        buyer = _retry_get_or_none(User, uid=buyer_uid)
+        if not buyer or buyer.role != "buyer":
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="Buyer not found"
@@ -89,8 +89,9 @@ class CartController:
             raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
                                 detail="Database unavailable, please try again later") from e
         
-        # Create new cart item
+        # Create new cart item with buyer_uid
         cart_item = CartItem(
+            buyer_uid=buyer_uid,
             product_uid=item_data.product_uid,
             quantity=item_data.quantity,
             price_at_time=item_data.price_at_time
@@ -176,7 +177,7 @@ class CartController:
         # Get all cart items with product details
         query = """
         MATCH (c:Cart {uid: $cart_uid})-[:CONTAINS]->(ci:CartItem)-[:IS_PRODUCT]->(p:FarmProduct)
-        RETURN ci, p.name as product_name, p.uid as product_uid
+        RETURN ci, ci.buyer_uid as buyer_uid, p.name as product_name, p.uid as product_uid
         ORDER BY ci.created_at DESC
         """
         
@@ -261,7 +262,7 @@ class CartController:
             pass  # Product not found, will return None
         except neo4j_exceptions.ServiceUnavailable:
             pass  # Database error, will return None
-        
+
         product_info = None
         if product:
             from ..schemas.cart import ProductInfo
@@ -274,12 +275,14 @@ class CartController:
                 image=product.image,
                 payment_methods=product.payment_methods
             )
-        
+
         return CartItemResponse(
             uid=cart_item.uid,
+            buyer_uid=cart_item.buyer_uid if hasattr(cart_item, 'buyer_uid') and cart_item.buyer_uid else "",
             product_uid=cart_item.product_uid,
             quantity=cart_item.quantity,
             price_at_time=cart_item.price_at_time,
             created_at=cart_item.created_at,
+            updated_at=cart_item.updated_at,
             product=product_info
         )

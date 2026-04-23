@@ -14,10 +14,7 @@ class FarmProductBase(BaseModel):
 
 
 class FarmProductCreate(FarmProductBase):
-    # The UID of the seller creating this product
-    seller_uid: str
-    # Optional seller_name from frontend (ignored by backend but accepted)
-    seller_name: Optional[str] = None
+    pass  # Seller comes from authenticated user in RBAC system
 
 
 class FarmProductUpdate(BaseModel):
@@ -30,11 +27,20 @@ class FarmProductUpdate(BaseModel):
     payment_methods: Optional[str] = None
 
 
-class FarmProductResponse(FarmProductBase):
+class FarmProductResponse(BaseModel):
     uid: str
-    seller_uid: Optional[str] = None
+    name: str
+    type: str
+    price: float
+    quantity: int
+    description: str
+    image: str
+    payment_methods: str
+    seller_uid: str  # Required field - product must have a seller
     seller_name: Optional[str] = None
     seller_location: Optional[str] = None
+    seller_contact: Optional[str] = None
+    seller_profile_picture: Optional[str] = None
     created_at: datetime
     updated_at: datetime
     

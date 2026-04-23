@@ -1,17 +1,19 @@
-from fastapi import APIRouter, Query, status
+from fastapi import APIRouter, Query, status, Depends
 from typing import List, Optional
 from ..schemas import FarmProductCreate, FarmProductUpdate, FarmProductResponse
 from ..controllers import FarmProductController
+from ..utils.dependencies import seller_only, seller_or_admin_only
+from ..models.user import User
 
 router = APIRouter(prefix="/api/products", tags=["Farm Products"])
 
 
 @router.post("/", response_model=FarmProductResponse, status_code=status.HTTP_201_CREATED)
-def create_product(product_data: FarmProductCreate):
+def create_product(product_data: FarmProductCreate, current_user: User = Depends(seller_only)):
     """
-    Create a new farm product
+    Create a new farm product (Sellers only)
     """
-    return FarmProductController.create_product(product_data)
+    return FarmProductController.create_product(product_data, current_user)
 
 
 @router.get("/", response_model=List[FarmProductResponse])
@@ -23,11 +25,7 @@ def get_all_products(
     seller_uid: Optional[str] = Query(None, description="Filter by seller UID")
 ):
     """
-    Get all farm products with optional filters:
-    - Search by name
-    - Filter by type
-    - Filter by price range
-    - Filter by seller
+    Get all farm products with optional filters
     """
     return FarmProductController.get_all_products(
         name=name,
@@ -47,16 +45,20 @@ def get_product(product_uid: str):
 
 
 @router.patch("/{product_uid}", response_model=FarmProductResponse)
-def update_product(product_uid: str, product_data: FarmProductUpdate):
+def update_product(
+    product_uid: str,
+    product_data: FarmProductUpdate,
+    current_user: User = Depends(seller_or_admin_only)
+):
     """
-    Update farm product
+    Update farm product (Owner seller or Admin only)
     """
-    return FarmProductController.update_product(product_uid, product_data)
+    return FarmProductController.update_product(product_uid, product_data, current_user)
 
 
 @router.delete("/{product_uid}", status_code=status.HTTP_200_OK)
-def delete_product(product_uid: str):
+def delete_product(product_uid: str, current_user: User = Depends(seller_or_admin_only)):
     """
-    Delete farm product
+    Delete farm product (Owner seller or Admin only)
     """
-    return FarmProductController.delete_product(product_uid)
+    return FarmProductController.delete_product(product_uid, current_user)

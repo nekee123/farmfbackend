@@ -1,61 +1,11 @@
 from fastapi import Depends, HTTPException, status
-from fastapi.security import OAuth2PasswordBearer
-from ..models import Buyer, Seller, Admin
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+from ..models import User, UserRole
 from .security import decode_access_token
 from neo4j import exceptions as neo4j_exceptions
 import time
 
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth/login")
-
-
-def get_current_buyer(token: str = Depends(oauth2_scheme)) -> Buyer:
-    """Get current authenticated buyer"""
-    credentials_exception = HTTPException(
-        status_code=status.HTTP_401_UNAUTHORIZED,
-        detail="Could not validate credentials",
-        headers={"WWW-Authenticate": "Bearer"},
-    )
-    
-    try:
-        payload = decode_access_token(token)
-        uid: str = payload.get("uid")
-        user_type: str = payload.get("user_type")
-        
-        if uid is None or user_type != "buyer":
-            raise credentials_exception
-        
-        buyer = _retry_get_or_none(Buyer, uid=uid)
-        if buyer is None:
-            raise credentials_exception
-        
-        return buyer
-    except ValueError:
-        raise credentials_exception
-
-
-def get_current_seller(token: str = Depends(oauth2_scheme)) -> Seller:
-    """Get current authenticated seller"""
-    credentials_exception = HTTPException(
-        status_code=status.HTTP_401_UNAUTHORIZED,
-        detail="Could not validate credentials",
-        headers={"WWW-Authenticate": "Bearer"},
-    )
-    
-    try:
-        payload = decode_access_token(token)
-        uid: str = payload.get("uid")
-        user_type: str = payload.get("user_type")
-        
-        if uid is None or user_type != "seller":
-            raise credentials_exception
-        
-        seller = _retry_get_or_none(Seller, uid=uid)
-        if seller is None:
-            raise credentials_exception
-        
-        return seller
-    except ValueError:
-        raise credentials_exception
+security = HTTPBearer()
 
 
 def _retry_get_or_none(model_class, **kwargs):
@@ -76,8 +26,8 @@ def _retry_get_or_none(model_class, **kwargs):
                         detail="Database unavailable, please try again later") from last_exc
 
 
-def get_current_admin(token: str = Depends(oauth2_scheme)) -> Admin:
-    """Get current authenticated admin"""
+def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(security)) -> User:
+    """Get current authenticated user"""
     credentials_exception = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
         detail="Could not validate credentials",
@@ -85,45 +35,57 @@ def get_current_admin(token: str = Depends(oauth2_scheme)) -> Admin:
     )
     
     try:
-        payload = decode_access_token(token)
-        uid: str = payload.get("sub")
-        username: str = payload.get("username")
-        role: str = payload.get("role")
-        
-        if uid is None or username is None or role is None:
-            raise credentials_exception
-        
-        admin = _retry_get_or_none(Admin, uid=uid)
-        if admin is None:
-            raise credentials_exception
-        
-        return admin
-    except ValueError:
-        raise credentials_exception
-
-
-def get_admin_from_token(token: str) -> Admin:
-    """Get admin from token (for login endpoint)"""
-    try:
+        token = credentials.credentials
         payload = decode_access_token(token)
         uid: str = payload.get("sub")
         
         if uid is None:
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Invalid token"
-            )
+            raise credentials_exception
         
-        admin = _retry_get_or_none(Admin, uid=uid)
-        if admin is None:
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Admin not found"
-            )
+        user = _retry_get_or_none(User, uid=uid)
+        if user is None:
+            raise credentials_exception
         
-        return admin
-    except ValueError:
+        return user
+    except (ValueError, Exception):
+        raise credentials_exception
+
+
+def admin_only(current_user: User = Depends(get_current_user)) -> User:
+    """Check if user is an admin"""
+    if current_user.role != UserRole.ADMIN.value:
         raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid token"
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You do not have permission to perform this action (Admin only)"
         )
+    return current_user
+
+
+def seller_only(current_user: User = Depends(get_current_user)) -> User:
+    """Check if user is a seller"""
+    if current_user.role != UserRole.SELLER.value:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You do not have permission to perform this action (Seller only)"
+        )
+    return current_user
+
+
+def buyer_only(current_user: User = Depends(get_current_user)) -> User:
+    """Check if user is a buyer"""
+    if current_user.role != UserRole.BUYER.value:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You do not have permission to perform this action (Buyer only)"
+        )
+    return current_user
+
+
+def seller_or_admin_only(current_user: User = Depends(get_current_user)) -> User:
+    """Check if user is a seller or admin"""
+    if current_user.role not in [UserRole.SELLER.value, UserRole.ADMIN.value]:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You do not have permission to perform this action (Seller or Admin only)"
+        )
+    return current_user

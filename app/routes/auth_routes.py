@@ -1,21 +1,29 @@
-from fastapi import APIRouter, status
-from ..schemas import Token, BuyerLogin, SellerLogin
+from fastapi import APIRouter, status, Depends
+from ..schemas import UserCreate, UserLogin, UserResponse, UserToken, UserUpdate
 from ..controllers import AuthController
 
-router = APIRouter(prefix="/auth", tags=["Authentication"])
+router = APIRouter(prefix="/api/auth", tags=["Authentication"])
 
 
-@router.post("/buyer/login", response_model=Token, status_code=status.HTTP_200_OK)
-def login_buyer(login_data: BuyerLogin):
+@router.post("/register", response_model=UserResponse, status_code=status.HTTP_201_CREATED)
+def register(user_data: UserCreate):
     """
-    Login as a buyer and receive JWT access token
+    Register a new user with an optional role (default is 'buyer')
     """
-    return AuthController.login_buyer(login_data)
+    return AuthController.register(user_data)
 
 
-@router.post("/seller/login", response_model=Token, status_code=status.HTTP_200_OK)
-def login_seller(login_data: SellerLogin):
+@router.post("/login", status_code=status.HTTP_200_OK)
+def login(login_data: UserLogin):
     """
-    Login as a seller and receive JWT access token
+    Unified login for all users (buyer, seller, admin) using email and password
     """
-    return AuthController.login_seller(login_data)
+    return AuthController.login(login_data)
+
+
+@router.put("/profile", response_model=UserResponse, status_code=status.HTTP_200_OK)
+def update_profile(user_data: UserUpdate):
+    """
+    Update user profile
+    """
+    return AuthController.update_profile(user_data)

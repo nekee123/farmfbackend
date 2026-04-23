@@ -33,14 +33,15 @@ class Cart(StructuredNode):
 
 class CartItem(StructuredNode):
     """Cart Item node in Neo4j graph database"""
-    
+
     uid = UniqueIdProperty()
+    buyer_uid = StringProperty(index=True)  # Direct reference to buyer's UID
     product_uid = StringProperty(required=True, index=True)
     quantity = IntegerProperty(default=1)  # Can't have both required=True and default=1
     price_at_time = FloatProperty(required=True)  # Price when added to cart
     created_at = DateTimeProperty(default_now=True)
     updated_at = DateTimeProperty(default_now=True)
-    
+
     # Relationships
     cart = RelationshipTo('app.models.cart.Cart', 'IN_CART')
     product = RelationshipTo('app.models.farm_product.FarmProduct', 'IS_PRODUCT')

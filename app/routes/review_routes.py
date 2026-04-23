@@ -23,7 +23,6 @@ class ReviewResponse(BaseModel):
     uid: str
     buyer_uid: str
     buyer_name: str
-    buyer_profile_picture: Optional[str] = None
     seller_uid: str
     order_uid: str
     product_uid: Optional[str] = None
@@ -51,29 +50,25 @@ def submit_review(review: ReviewCreate):
         review_uid = str(uuid.uuid4())
         now = datetime.utcnow().isoformat()
 
-        # Derive buyer profile picture + product info from the graph (best-effort).
+        # Derive product info from the graph (best-effort).
         # This prevents frontend parsing issues when these fields are missing.
         derive_query = """
         MATCH (o:Order {uid: $order_uid})
         OPTIONAL MATCH (o)-[:CONTAINS]->(p:FarmProduct)
-        OPTIONAL MATCH (b:Buyer {uid: $buyer_uid})
         RETURN
           p.uid AS product_uid,
-          p.name AS product_name,
-          b.profile_picture AS buyer_profile_picture
+          p.name AS product_name
         """
         derived = session.run(
             derive_query,
-            {"order_uid": review.order_uid, "buyer_uid": review.buyer_uid},
+            {"order_uid": review.order_uid},
         ).single()
 
         derived_product_uid = None
         derived_product_name = None
-        derived_buyer_profile_picture = None
         if derived:
             derived_product_uid = derived.get("product_uid")
             derived_product_name = derived.get("product_name")
-            derived_buyer_profile_picture = derived.get("buyer_profile_picture")
 
         final_product_uid = derived_product_uid or review.product_uid
         
@@ -83,7 +78,6 @@ def submit_review(review: ReviewCreate):
             uid: $uid,
             buyer_uid: $buyer_uid,
             buyer_name: $buyer_name,
-            buyer_profile_picture: $buyer_profile_picture,
             seller_uid: $seller_uid,
             order_uid: $order_uid,
             product_uid: $product_uid,
@@ -94,7 +88,6 @@ def submit_review(review: ReviewCreate):
             updated_at: $updated_at
         })
         RETURN r.uid AS uid, r.buyer_uid AS buyer_uid, r.buyer_name AS buyer_name,
-               r.buyer_profile_picture AS buyer_profile_picture,
                r.seller_uid AS seller_uid, r.order_uid AS order_uid,
                r.product_uid AS product_uid, r.product_name AS product_name,
                r.rating AS rating, r.comment AS comment,
@@ -105,7 +98,6 @@ def submit_review(review: ReviewCreate):
             "uid": review_uid,
             "buyer_uid": review.buyer_uid,
             "buyer_name": review.buyer_name,
-            "buyer_profile_picture": derived_buyer_profile_picture,
             "seller_uid": review.seller_uid,
             "order_uid": review.order_uid,
             "product_uid": final_product_uid,
@@ -141,21 +133,10 @@ def submit_review(review: ReviewCreate):
             "created_at": now
         })
         
-        # Update seller's average rating
-        update_rating_query = """
-        MATCH (s:Seller {uid: $seller_uid})
-        OPTIONAL MATCH (r:Review {seller_uid: $seller_uid})
-        WITH s, avg(r.rating) AS avg_rating, count(r) AS review_count
-        SET s.average_rating = avg_rating,
-            s.review_count = review_count
-        """
-        session.run(update_rating_query, {"seller_uid": review.seller_uid})
-        
         return {
             "uid": record["uid"],
             "buyer_uid": record["buyer_uid"],
             "buyer_name": record["buyer_name"],
-            "buyer_profile_picture": record.get("buyer_profile_picture"),
             "seller_uid": record["seller_uid"],
             "order_uid": record["order_uid"],
             "product_uid": record.get("product_uid"),
@@ -175,7 +156,6 @@ def get_seller_reviews(seller_uid: str):
         query = """
         MATCH (r:Review {seller_uid: $seller_uid})
         RETURN r.uid AS uid, r.buyer_uid AS buyer_uid, r.buyer_name AS buyer_name,
-               r.buyer_profile_picture AS buyer_profile_picture,
                r.seller_uid AS seller_uid, r.order_uid AS order_uid,
                r.product_uid AS product_uid, r.product_name AS product_name,
                r.rating AS rating, r.comment AS comment,
@@ -189,7 +169,6 @@ def get_seller_reviews(seller_uid: str):
                 "uid": record["uid"],
                 "buyer_uid": record["buyer_uid"],
                 "buyer_name": record["buyer_name"],
-                "buyer_profile_picture": record.get("buyer_profile_picture"),
                 "seller_uid": record["seller_uid"],
                 "order_uid": record["order_uid"],
                 "product_uid": record.get("product_uid"),
@@ -207,21 +186,24 @@ def get_seller_rating_summary(seller_uid: str):
     """Get rating summary for a seller"""
     driver = get_db()
     with driver.session() as session:
+        # Calculate rating from reviews directly
         query = """
-        MATCH (s:Seller {uid: $seller_uid})
-        OPTIONAL MATCH (r:Review {seller_uid: $seller_uid})
-        RETURN s.average_rating AS average_rating, 
-               s.review_count AS review_count,
+        MATCH (r:Review {seller_uid: $seller_uid})
+        RETURN avg(r.rating) AS average_rating, 
                count(r) AS total_reviews
         """
         result = session.run(query, {"seller_uid": seller_uid})
         record = result.single()
         
         if not record:
-            raise HTTPException(status_code=404, detail="Seller not found")
+            return {
+                "seller_uid": seller_uid,
+                "average_rating": 0,
+                "review_count": 0
+            }
         
         return {
             "seller_uid": seller_uid,
             "average_rating": record["average_rating"] or 0,
-            "review_count": record["review_count"] or 0
+            "review_count": record["total_reviews"] or 0
         }

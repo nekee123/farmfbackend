@@ -12,8 +12,10 @@ from datetime import datetime
 
 class Order(StructuredNode):
     """Order node in Neo4j graph database"""
-    
+
     uid = UniqueIdProperty()
+    buyer_uid = StringProperty(index=True)  # Direct reference to buyer's UID
+    seller_uid = StringProperty(index=True)  # Direct reference to seller's UID
     quantity = IntegerProperty(default=1)
     total_price = FloatProperty(required=True)
     order_status = StringProperty(
@@ -25,7 +27,7 @@ class Order(StructuredNode):
             "Delivered": "Delivered"
         }
     )
-    
+
     payment_method = StringProperty(
         required=True,
         choices={
@@ -33,13 +35,13 @@ class Order(StructuredNode):
             "Meet Up / Cash on Pick-up": "Meet Up / Cash on Pick-up"
         }
     )
-    
+
     created_at = DateTimeProperty(default_now=True)
     updated_at = DateTimeProperty(default_now=True)
     
     # Relationships
-    buyer = RelationshipTo('app.models.buyer.Buyer', 'PLACED_BY')
-    seller = RelationshipTo('app.models.seller.Seller', 'FULFILLED_BY')
+    buyer = RelationshipTo('app.models.user.User', 'PLACED_BY')
+    seller = RelationshipTo('app.models.user.User', 'FULFILLED_BY')
     farm_product = RelationshipTo('app.models.farm_product.FarmProduct', 'CONTAINS')
     
     def update_timestamp(self):
