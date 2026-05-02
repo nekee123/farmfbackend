@@ -38,3 +38,19 @@ def mark_message_as_read(message_uid: str, current_user: User = Depends(get_curr
     Mark a message as read
     """
     return MessageController.mark_as_read(message_uid, current_user.uid)
+
+@router.get("/chat/messages")
+def get_messages(user1: str, user2: str):
+    query = """
+    MATCH (m:Message)
+    WHERE 
+        (m.sender_uid = $user1 AND m.receiver_uid = $user2)
+        OR
+        (m.sender_uid = $user2 AND m.receiver_uid = $user1)
+    RETURN m
+    ORDER BY m.timestamp ASC
+    """
+
+    # run query
+
+    return {"messages": []}

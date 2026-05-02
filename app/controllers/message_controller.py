@@ -6,6 +6,34 @@ from ..database import get_db
 from datetime import datetime
 import uuid
 
+from typing import List
+from fastapi import HTTPException, status
+from ..models import Message, User
+from ..schemas import MessageCreate, MessageResponse, ConversationResponse
+from ..database import get_db
+from datetime import datetime
+import uuid
+from neo4j.time import DateTime as Neo4jDateTime   # 👈 add this too
+
+
+# =========================
+# UTIL FUNCTION (PUT HERE)
+# =========================
+def normalize_datetime(value):
+    if value is None:
+        return None
+
+    if isinstance(value, Neo4jDateTime):
+        return value.iso_format()
+
+    if isinstance(value, datetime):
+        return value.isoformat()
+
+    if isinstance(value, (float, int)):
+        return datetime.utcfromtimestamp(value).isoformat()
+
+    return str(value)
+
 
 class MessageController:
     """Controller for Message operations"""
@@ -74,10 +102,9 @@ class MessageController:
                     "receiver_uid": record["receiver_uid"],
                     "message": record["message"],
                     "is_read": record["is_read"],
-                    "created_at": record["created_at"],
-                    "updated_at": record["updated_at"]
-                })
-            
+                    "created_at": normalize_datetime(record["created_at"]),
+                    "updated_at": normalize_datetime(record["updated_at"])  
+                })     
             return messages
     
     @staticmethod
