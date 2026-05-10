@@ -6,6 +6,7 @@ from ..schemas import OrderCreate, OrderStatusUpdate, OrderResponse, Notificatio
 from .notification_controller import NotificationController
 from ..database import get_db
 from datetime import datetime
+from app.controllers.farm_product_controller import FarmProductController
 import uuid
 
 
@@ -70,7 +71,8 @@ class OrderController:
                 seller_uid=seller.uid,
                 quantity=order_data.quantity,
                 total_price=total_price,
-                payment_method=order_data.payment_method,
+                payment_method=backend_payment_method,
+                buyer_address=order_data.buyer_address,  # 🔥 NEW
                 order_status="Pending"
             ).save()
 
@@ -170,6 +172,7 @@ class OrderController:
             OPTIONAL MATCH (r:Review {order_uid: o.uid})
             RETURN o.uid as uid, o.buyer_uid as buyer_uid, o.seller_uid as seller_uid,
                    o.quantity as quantity, o.total_price as total_price,
+                   o.buyer_address as buyer_address,
                    o.order_status as order_status, o.payment_method as payment_method,
                    o.created_at as created_at, o.updated_at as updated_at,
                    b.uid as buyer_uid_rel, b.full_name as buyer_name, b.phone_number as buyer_contact,
@@ -197,6 +200,7 @@ class OrderController:
                     "total_price": record["total_price"],
                     "order_status": record["order_status"],
                     "payment_method": record["payment_method"],
+                    "buyer_address": record["buyer_address"] or "N/A",
                     "is_reviewed": bool(record["is_reviewed"]),
                     "created_at": record["created_at"],
                     "updated_at": record["updated_at"]
@@ -216,6 +220,7 @@ class OrderController:
             OPTIONAL MATCH (r:Review {order_uid: o.uid})
             RETURN o.uid as uid, o.buyer_uid as buyer_uid, o.seller_uid as seller_uid,
                    o.quantity as quantity, o.total_price as total_price,
+                   o.buyer_address as buyer_address,
                    o.order_status as order_status, o.payment_method as payment_method,
                    o.created_at as created_at, o.updated_at as updated_at,
                    b.uid as buyer_uid_rel, b.full_name as buyer_name, b.phone_number as buyer_contact,
@@ -243,6 +248,7 @@ class OrderController:
                     "total_price": record["total_price"],
                     "order_status": record["order_status"],
                     "payment_method": record["payment_method"],
+                    "buyer_address": record["buyer_address"] or "N/A",
                     "is_reviewed": bool(record["is_reviewed"]),
                     "created_at": record["created_at"],
                     "updated_at": record["updated_at"]
@@ -559,3 +565,101 @@ class OrderController:
 
         order.delete()
         return {"message": "Order deleted successfully"}
+    
+
+def create_favorite(user_uid: str, product_uid: str):
+    driver = get_db()
+    with driver.session() as session:
+        query = """
+        MATCH (u:User {uid: $user_uid})
+        MATCH (p:FarmProduct {uid: $product_uid})
+        MERGE (u)-[:FAVORITE]->(p)
+        RETURN p
+        """
+        session.run(query, {
+            "user_uid": user_uid,
+            "product_uid": product_uid
+        })
+
+
+def remove_favorite(user_uid: str, product_uid: str):
+    driver = get_db()
+    with driver.session() as session:
+        query = """
+        MATCH (u:User {uid: $user_uid})-[f:FAVORITE]->(p:FarmProduct {uid: $product_uid})
+        DELETE f
+        """
+        session.run(query, {
+            "user_uid": user_uid,
+            "product_uid": product_uid
+        })
+
+def get_favorite_products(user_uid: str):
+    driver = get_db()
+    with driver.session() as session:
+        query = """
+        MATCH (u:User {uid: $user_uid})-[:FAVORITE]->(p:FarmProduct)
+        RETURN p.uid as uid
+        """
+        results = session.run(query, {"user_uid": user_uid})
+
+        favorites = []
+        for record in results:
+            product = _retry_get_or_none(FarmProduct, uid=record["uid"])
+            if product:
+                favorites.append(
+                    FarmProductController._to_response(product)  # 🔥 reuse formatter
+                )
+
+        return favorites
+    print("i reach the controller frontline")
+    driver = get_db()
+    with driver.session() as session:
+        query = """
+        MATCH (u:User {uid: $user_uid})-[:FAVORITE]->(p:FarmProduct)
+        OPTIONAL MATCH (p)-[:SOLD_BY]->(s:User)
+        RETURN p.uid as uid,
+            p.name as name,
+            p.price as price,
+            p.quantity as quantity,
+            p.description as description,
+            p.category as category,
+            p.image_url as image_url,
+            p.created_at as created_at,
+            s.uid as seller_uid,
+            s.full_name as seller_name
+        """
+        results = session.run(query, {"user_uid": user_uid})
+        print("i reach the controller after query")
+
+        favorites = []
+        for record in results:
+            favorites.append({
+                "uid": record["uid"],
+                "name": record["name"],
+                "price": record["price"],
+                "quantity": record["quantity"],
+                "description": record["description"] or "",
+                "category": record["category"] or "",
+                "image_url": record["image_url"] or "",
+                "seller_uid": record["seller_uid"] or "",
+                "seller_name": record["seller_name"] or "",
+                "created_at": record["created_at"]
+            })
+        print("i reach the controller before return")
+
+        return favorites
+    
+def is_favorited(user_uid: str, product_uid: str) -> bool:
+    driver = get_db()
+    with driver.session() as session:
+        query = """
+        MATCH (u:User {uid: $user_uid})-[f:FAVORITE]->(p:FarmProduct {uid: $product_uid})
+        RETURN COUNT(f) > 0 AS is_favorited
+        """
+        result = session.run(query, {
+            "user_uid": user_uid,
+            "product_uid": product_uid
+        }).single()
+
+        return result["is_favorited"] if result else False

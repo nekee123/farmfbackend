@@ -54,3 +54,4 @@ def clear_cart(current_user: User = Depends(buyer_only)):
     Clear all items from cart (Buyer only)
     """
     return CartController.clear_cart(current_user.uid)
+

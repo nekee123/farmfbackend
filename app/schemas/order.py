@@ -7,7 +7,7 @@ class OrderCreate(BaseModel):
     farm_product_uid: str
     quantity: int = Field(..., gt=0)
     payment_method: str = Field(..., pattern="^(Cash on Delivery|Meet Up \/ Cash on Pick-up)$")
-
+    buyer_address: str = Field(..., min_length=2)
 
 class OrderStatusUpdate(BaseModel):
     order_status: str = Field(..., pattern="^(Pending|Confirmed|Cancelled|Delivered)$")

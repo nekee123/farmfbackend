@@ -18,6 +18,7 @@ class Order(StructuredNode):
     seller_uid = StringProperty(index=True)  # Direct reference to seller's UID
     quantity = IntegerProperty(default=1)
     total_price = FloatProperty(required=True)
+    buyer_address = StringProperty(required=True)
     order_status = StringProperty(
         default="Pending",
         choices={
@@ -28,13 +29,10 @@ class Order(StructuredNode):
         }
     )
 
-    payment_method = StringProperty(
-        required=True,
-        choices={
-            "Cash on Delivery": "Cash on Delivery",
-            "Meet Up / Cash on Pick-up": "Meet Up / Cash on Pick-up"
-        }
-    )
+    payment_method = StringProperty(choices={
+        "CASH_ON_DELIVERY": "Cash on Delivery",
+        "MEET_UP_CASH_ON_PICKUP": "Meet Up / Cash on Pick-up"
+    }, required=True)
 
     created_at = DateTimeProperty(default_now=True)
     updated_at = DateTimeProperty(default_now=True)

@@ -150,59 +150,73 @@ class MessageController:
     def get_conversations(current_user_uid: str) -> List[dict]:
         """Get list of all conversations for current user with unread message count"""
         driver = get_db()
+
         with driver.session() as session:
             query = """
             MATCH (m:Message)
             WHERE m.sender_uid = $current_uid OR m.receiver_uid = $current_uid
+
             WITH 
                 CASE 
                     WHEN m.sender_uid = $current_uid THEN m.receiver_uid
                     ELSE m.sender_uid
                 END AS other_user_uid,
                 m
+
             MATCH (u:User {uid: other_user_uid})
+
             WITH 
                 other_user_uid,
                 u.full_name AS user_name,
                 u.profile_picture AS profile_picture,
+                u.phone_number AS phone_number,
                 m
+
             WITH 
                 other_user_uid,
                 user_name,
                 profile_picture,
+                phone_number,
                 collect(m) AS messages
+
             WITH 
                 other_user_uid,
                 user_name,
                 profile_picture,
+                phone_number,
                 messages,
                 [msg IN messages WHERE msg.receiver_uid = $current_uid AND NOT msg.is_read] AS unread_messages,
                 messages[-1] AS last_message
+
             RETURN 
                 other_user_uid AS user_uid,
                 user_name,
                 profile_picture,
+                phone_number,
                 size(unread_messages) AS unread_count,
                 last_message.message AS last_message,
                 last_message.created_at AS last_message_time,
                 false AS is_online
+
             ORDER BY last_message_time DESC
             """
-            
+
             results = session.run(query, {"current_uid": current_user_uid})
-            
+
             conversations = []
+
             for record in results:
                 conversations.append({
                     "user_uid": record["user_uid"],
                     "user_name": record["user_name"],
                     "profile_picture": record.get("profile_picture"),
+                    "phone_number": record.get("phone_number"),
                     "unread_count": record["unread_count"],
                     "last_message": record.get("last_message"),
                     "last_message_time": record.get("last_message_time"),
                     "is_online": record.get("is_online", False)
                 })
-            
+
             return conversations
     
     @staticmethod

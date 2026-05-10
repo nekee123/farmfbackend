@@ -4,15 +4,15 @@ from ..schemas import OrderCreate, OrderStatusUpdate, OrderResponse
 from ..controllers import OrderController
 from ..utils.dependencies import buyer_only, seller_only, admin_only, get_current_user
 from ..models.user import User
-
+from fastapi import HTTPException
+from ..controllers.order_controller import create_favorite, get_favorite_products, remove_favorite, is_favorited
 router = APIRouter(prefix="/api/orders", tags=["Orders"])
 
 
+import traceback
+
 @router.post("/", response_model=dict, status_code=status.HTTP_201_CREATED)
 def create_order(order_data: OrderCreate, current_user: User = Depends(buyer_only)):
-    """
-    Place a new order (Buyers only)
-    """
     try:
         order = OrderController.create_order(order_data, current_user)
         return {
@@ -21,9 +21,18 @@ def create_order(order_data: OrderCreate, current_user: User = Depends(buyer_onl
             "data": order
         }
     except Exception as e:
+        import traceback
+        traceback.print_exc()
+
+        error_message = str(e)
+
+    # 🔥 Handle FastAPI HTTPException properly
+        if isinstance(e, HTTPException):
+            error_message = e.detail
+
         return {
             "success": False,
-            "error": str(e),
+            "error": error_message,
             "data": None
         }
 
@@ -143,3 +152,23 @@ def delete_order(order_uid: str, current_user: User = Depends(get_current_user))
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Only admins and sellers can delete orders"
         )
+
+
+@router.post("/favorite/{product_uid}")
+def favorite_product(product_uid: str, current_user: User = Depends(get_current_user)):
+    create_favorite(current_user.uid, product_uid)
+    print("i reach the post routes")
+    return {"success": True, "message": "Added to favorites"}
+
+
+@router.delete("/favorite/{product_uid}")
+def unfavorite_product(product_uid: str, current_user: User = Depends(get_current_user)):
+    remove_favorite(current_user.uid, product_uid)
+    return {"success": True, "message": "Removed from favorites"}
+
+
+@router.get("/favorite/check/{product_uid}")
+def check_favorite(product_uid: str, current_user: User = Depends(get_current_user)):
+    return {
+        "is_favorited": is_favorited(current_user.uid, product_uid)
+    }

@@ -5,7 +5,7 @@ from ..controllers import NotificationController
 from ..utils.dependencies import get_current_user
 from ..models.user import User
 from ..database import get_db
-
+from ..controllers.order_controller import create_favorite, get_favorite_products, remove_favorite
 router = APIRouter(prefix="/api/notifications", tags=["Notifications"])
 
 
@@ -50,3 +50,8 @@ def get_unread_count(current_user: User = Depends(get_current_user)):
         return {
             "unread_count": record["unread_count"] if record else 0
         }
+
+@router.get("/get_favorites")
+def get_favorites(current_user: User = Depends(get_current_user)):
+    print("i reach the routes")
+    return get_favorite_products(current_user.uid)
