@@ -62,3 +62,4 @@ def delete_product(product_uid: str, current_user: User = Depends(seller_or_admi
     Delete farm product (Owner seller or Admin only)
     """
     return FarmProductController.delete_product(product_uid, current_user)
+

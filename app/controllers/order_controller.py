@@ -16,41 +16,66 @@ class OrderController:
     @staticmethod
     def create_order(order_data: OrderCreate, current_user: User) -> dict:
         """Create a new order for the current authenticated buyer"""
+
         try:
+            from neomodel import db
+
             # Get product first to validate payment method
             product = _retry_get_or_none(FarmProduct, uid=order_data.farm_product_uid)
+
             if not product:
-                raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Product not found")
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail="Product not found"
+                )
 
             # Validate payment method against product's available methods
             available_methods = []
+
             if hasattr(product, 'payment_methods') and product.payment_methods:
-                available_methods = [method.strip() for method in product.payment_methods.split(',') if method.strip()]
+                available_methods = [
+                    method.strip()
+                    for method in product.payment_methods.split(',')
+                    if method.strip()
+                ]
 
-            # If no payment methods specified, default to both available
+            # Default methods
             if not available_methods:
-                available_methods = ["CASH_ON_DELIVERY", "MEET_UP_CASH_ON_PICKUP"]
+                available_methods = [
+                    "CASH_ON_DELIVERY",
+                    "MEET_UP_CASH_ON_PICKUP"
+                ]
 
-            # Convert frontend payment method names to database format
+            # Frontend → Backend payment method mapping
             frontend_to_backend = {
                 "Cash on Delivery": "CASH_ON_DELIVERY",
                 "Meet Up / Cash on Pick-up": "MEET_UP_CASH_ON_PICKUP"
             }
 
-            backend_payment_method = frontend_to_backend.get(order_data.payment_method, order_data.payment_method)
+            backend_payment_method = frontend_to_backend.get(
+                order_data.payment_method,
+                order_data.payment_method
+            )
 
+            # Validate selected payment method
             if backend_payment_method not in available_methods:
-                # Convert available methods to frontend format for error message
+
                 backend_to_frontend = {
                     "CASH_ON_DELIVERY": "Cash on Delivery",
                     "MEET_UP_CASH_ON_PICKUP": "Meet Up / Cash on Pick-up"
                 }
-                available_labels = [backend_to_frontend.get(method, method) for method in available_methods]
+
+                available_labels = [
+                    backend_to_frontend.get(method, method)
+                    for method in available_methods
+                ]
+
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST,
                     detail=f"Payment method '{order_data.payment_method}' is not available for this product. Available methods: {', '.join(available_labels)}"
                 )
 
+            # Validate quantity
             if product.quantity < order_data.quantity:
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST,
@@ -59,20 +84,58 @@ class OrderController:
 
             # Get seller
             sellers = product.seller.all()
+
             if not sellers:
-                raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Product has no seller associated with it")
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Product has no seller associated with it"
+                )
+
             seller = sellers[0]
 
+            # =========================================
+            # ORIGINAL TOTAL
+            # =========================================
             total_price = product.price * order_data.quantity
+            print("ORDER DATA:", order_data.dict())
 
-            # Create order with buyer_uid and seller_uid
+            print("DEAL ID:", getattr(order_data, "deal_id", None))
+            # =========================================
+            # APPLY DEAL DISCOUNT
+            # =========================================
+            if hasattr(order_data, "deal_id") and order_data.deal_id:
+
+                query = """
+                MATCH (d:Deal {deal_id: $deal_id})
+                RETURN d.percentage, d.expires_at
+                """
+
+                results, _ = db.cypher_query(query, {
+                    "deal_id": order_data.deal_id
+                })
+
+                if results:
+
+                    discount_percentage = results[0][0]
+
+                    # Compute discount
+                    discount_amount = (
+                        total_price * (discount_percentage / 100)
+                    )
+
+                    # Apply discount
+                    total_price = total_price - discount_amount
+
+            # =========================================
+            # CREATE ORDER
+            # =========================================
             order = Order(
                 buyer_uid=current_user.uid,
                 seller_uid=seller.uid,
                 quantity=order_data.quantity,
                 total_price=total_price,
                 payment_method=backend_payment_method,
-                buyer_address=order_data.buyer_address,  # 🔥 NEW
+                buyer_address=order_data.buyer_address,
                 order_status="Pending"
             ).save()
 
@@ -81,10 +144,10 @@ class OrderController:
             order.seller.connect(seller)
             order.farm_product.connect(product)
 
-            # Update product quantity
+            # Update quantity
             product.reduce_quantity(order_data.quantity)
 
-            # Create notification for seller
+            # Create notification
             NotificationController.create_notification(
                 NotificationCreate(
                     recipient_uid=seller.uid,
@@ -98,8 +161,10 @@ class OrderController:
 
         except HTTPException:
             raise
+
         except Exception as e:
             print(f"Order creation error: {str(e)}")
+
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail=f"Order creation failed: {str(e)}"

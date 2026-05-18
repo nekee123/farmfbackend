@@ -26,7 +26,8 @@ class AuthController:
             full_name=user_data.full_name,
             role=user_data.role.value,
             location=user_data.location or "",
-            profile_picture=user_data.profile_picture or ""
+            profile_picture=user_data.profile_picture or "",
+            is_banned=False
         ).save()
         
         return UserResponse.from_orm(new_user)
@@ -34,22 +35,44 @@ class AuthController:
     @staticmethod
     def login(login_data: UserLogin) -> dict:
         """Authenticate user and return unified JWT token with user data"""
-        user = _retry_get_or_none(User, phone_number=login_data.phone_number)
-        if not user or not verify_password(login_data.password, user.password_hash):
+
+        user = _retry_get_or_none(
+            User,
+            phone_number=login_data.phone_number
+        )
+
+    # Check credentials
+        if not user or not verify_password(
+            login_data.password,
+            user.password_hash
+        ):
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="Incorrect phone number or password",
                 headers={"WWW-Authenticate": "Bearer"},
             )
-        
-        # Create access token with sub and role in payload
+
+    # =====================================
+    # CHECK IF USER IS BANNED
+    # =====================================
+        if user.is_banned:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Your account has been banned"
+            )
+
+    # Create access token
         access_token = create_access_token(
-            data={"sub": user.uid, "role": user.role}
+            data={
+                "sub": user.uid,
+                "role": user.role
+            }
         )
-        
+
+        # Update last login
         user.update_last_login()
-        
-        # Return both token and user data
+
+        # Return token + user data
         return {
             "access_token": access_token,
             "token_type": "bearer",
@@ -60,6 +83,7 @@ class AuthController:
                 "role": user.role,
                 "location": user.location,
                 "profile_picture": user.profile_picture,
+                "is_banned": user.is_banned,
                 "created_at": user.created_at.isoformat() if user.created_at else None,
                 "updated_at": user.updated_at.isoformat() if user.updated_at else None,
                 "last_login": user.last_login.isoformat() if user.last_login else None,

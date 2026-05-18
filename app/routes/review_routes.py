@@ -207,3 +207,60 @@ def get_seller_rating_summary(seller_uid: str):
             "average_rating": record["average_rating"] or 0,
             "review_count": record["total_reviews"] or 0
         }
+
+
+@router.get("/deals")
+def get_deals():
+    from neomodel import db
+    from datetime import datetime, timezone
+
+    query = """
+    MATCH (d:Deal)
+    RETURN d.deal_id, d.percentage, d.type,
+           d.created_at, d.expires_at
+    ORDER BY d.created_at DESC
+    """
+
+    results, _ = db.cypher_query(query)
+
+    deals = []
+
+    # IMPORTANT FIX: timezone-aware now
+    now = datetime.now(timezone.utc)
+
+    for row in results:
+        deal_id = row[0]
+        percentage = row[1]
+        deal_type = row[2]
+        created_at = row[3]
+        expires_at = row[4]
+
+        # Convert Neo4j datetime safely
+        try:
+            expires_at_dt = expires_at.to_native()
+        except Exception:
+            expires_at_dt = expires_at
+
+        # Ensure timezone consistency
+        if expires_at_dt.tzinfo is None:
+            expires_at_dt = expires_at_dt.replace(tzinfo=timezone.utc)
+
+        # Compute remaining time
+        remaining = expires_at_dt - now
+
+        if remaining.total_seconds() <= 0:
+            status = "expired"
+            time_left = "0"
+        else:
+            status = "active"
+            time_left = str(remaining)
+
+        deals.append({
+            "deal_id": deal_id,
+            "percentage": percentage,
+            "type": deal_type,
+            "status": status,
+            "time_left": time_left
+        })
+
+    return deals

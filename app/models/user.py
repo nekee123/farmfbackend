@@ -4,7 +4,8 @@ from neomodel import (
     UniqueIdProperty,
     DateTimeProperty,
     RelationshipTo,
-    RelationshipFrom
+    RelationshipFrom,
+    BooleanProperty
 )
 from datetime import datetime
 from enum import Enum
@@ -26,7 +27,7 @@ class User(StructuredNode):
     role = StringProperty(default=UserRole.BUYER.value, index=True)
     location = StringProperty(default="")
     profile_picture = StringProperty(default="")
-    
+    is_banned = BooleanProperty(default=False)
     created_at = DateTimeProperty(default_now=True)
     updated_at = DateTimeProperty(default_now=True)
     last_login = DateTimeProperty(default=None)

@@ -70,16 +70,28 @@ def delete_admin(admin_uid: str, current_user: User = Depends(admin_only)):
 @router.delete("/users/{user_uid}")
 def delete_user(user_uid: str, current_user: User = Depends(admin_only)):
     """Delete a user (admin only)"""
+
     from ..utils.dependencies import _retry_get_or_none
-    from ..models import User, FarmProduct, Order
+    from ..models import User
     from neomodel import db
+    import traceback
+
+    print("=== DELETE USER DEBUG START ===")
+    print("user_uid:", user_uid)
 
     user = _retry_get_or_none(User, uid=user_uid)
+
+    print("Fetched user:", user)
+
     if not user:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="User not found"
         )
+
+    print("User UID:", getattr(user, "uid", "NO UID"))
+    print("User role:", getattr(user, "role", "NO ROLE"))
+    print("Current admin UID:", getattr(current_user, "uid", "NO UID"))
 
     # Prevent deleting self
     if user.uid == current_user.uid:
@@ -88,31 +100,64 @@ def delete_user(user_uid: str, current_user: User = Depends(admin_only)):
             detail="Cannot delete yourself"
         )
 
-    # Delete related data (products, orders, etc.)
     try:
-        # Delete products if seller
+        # ========================
+        # SELLER → delete products
+        # ========================
         if user.role == "seller":
-            products = FarmProduct.nodes.filter(seller__uid=user_uid)
-            for product in products:
-                product.delete()
+            print("Looking for seller products...")
 
-        # Delete orders if buyer
+            query = """
+            MATCH (p:FarmProduct)-[:SOLD_BY]->(u:User {uid: $uid})
+            DETACH DELETE p
+            """
+
+            db.cypher_query(query, {"uid": user_uid})
+
+            print("Seller products deleted")
+
+        # ========================
+        # BUYER → delete orders
+        # ========================
         if user.role == "buyer":
-            orders = Order.nodes.filter(buyer__uid=user_uid)
-            for order in orders:
-                order.delete()
+            print("Looking for buyer orders...")
 
-        # Delete the user
-        user.delete()
+            query = """
+            MATCH (o:Order)-[:PLACED_BY]->(u:User {uid: $uid})
+            DETACH DELETE o
+            """
+
+            db.cypher_query(query, {"uid": user_uid})
+
+            print("Buyer orders deleted")
+
+        # ========================
+        # DELETE USER
+        # ========================
+        print("Deleting user now...")
+
+        query = """
+        MATCH (u:User {uid: $uid})
+        DETACH DELETE u
+        """
+
+        db.cypher_query(query, {"uid": user_uid})
+
+        print("=== DELETE SUCCESS ===")
 
         return {"message": "User deleted successfully"}
+
     except Exception as e:
+        print("=== DELETE ERROR ===")
+        print("Error type:", type(e))
+        print("Error:", str(e))
+        traceback.print_exc()
+
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Error deleting user: {str(e)}"
         )
-
-
+        
 @router.post("/users/manage")
 def manage_user(user_mgmt: UserManagement, request: Request,
                current_user: User = Depends(admin_only)):
@@ -200,3 +245,143 @@ def update_system_settings(request: Request,
     """Update system settings"""
     # Implement system settings update
     return {"message": "System settings update endpoint (to be implemented)"}
+
+
+
+@router.post("/deals")
+def create_deal(data: dict, current_user: User = Depends(admin_only)):
+    from datetime import datetime, timedelta
+    from neomodel import db
+    import uuid
+
+    print("=== CREATE DEAL START ===")
+    print("Payload:", data)
+
+    percentage = int(data["percentage"])
+    deal_type = data["type"]
+    duration_value = int(data["duration_value"])
+    duration_unit = data["duration_unit"]
+
+    created_at = datetime.utcnow()
+
+    # compute expiry
+    if duration_unit == "hours":
+        expires_at = created_at + timedelta(hours=duration_value)
+    else:
+        expires_at = created_at + timedelta(days=duration_value)
+
+    deal_id = str(uuid.uuid4())
+
+    query = """
+    CREATE (d:Deal {
+        deal_id: $deal_id,
+        percentage: $percentage,
+        type: $type,
+        duration_value: $duration_value,
+        duration_unit: $duration_unit,
+        created_at: datetime($created_at),
+        expires_at: datetime($expires_at)
+    })
+    RETURN d
+    """
+
+    result, _ = db.cypher_query(query, {
+        "deal_id": deal_id,
+        "percentage": percentage,
+        "type": deal_type,
+        "duration_value": duration_value,
+        "duration_unit": duration_unit,
+        "created_at": created_at.isoformat(),
+        "expires_at": expires_at.isoformat()
+    })
+
+    print("Deal created:", deal_id)
+    print("=== CREATE DEAL END ===")
+
+    return {
+        "message": "Deal created successfully",
+        "deal_id": deal_id
+    }
+
+@router.delete("/deals/{deal_id}")
+def delete_deal(deal_id: str, current_user: User = Depends(admin_only)):
+    from neomodel import db
+
+    query = """
+    MATCH (d:Deal {deal_id: $deal_id})
+    DETACH DELETE d
+    """
+
+    db.cypher_query(query, {"deal_id": deal_id})
+
+    return {"message": "Deal deleted"}
+
+
+
+@router.put("/users/{user_uid}/ban-status")
+def update_ban_status(
+    user_uid: str,
+    data: dict,
+    current_user: User = Depends(admin_only)
+    ):
+    """
+    Update user ban status
+
+    Body:
+    {
+        "is_banned": true
+    }
+    """
+
+    from ..models import User
+    from ..utils.dependencies import _retry_get_or_none
+
+    user = _retry_get_or_none(User, uid=user_uid)
+
+    if not user:
+        raise HTTPException(
+            status_code=404,
+            detail="User not found"
+        )
+
+    # Prevent admin banning self
+    if user.uid == current_user.uid:
+        raise HTTPException(
+            status_code=400,
+            detail="You cannot ban yourself"
+        )
+
+    # Update value
+    user.is_banned = data.get("is_banned", False)
+
+    user.save()
+
+    return {
+        "message": "Ban status updated successfully",
+        "uid": user.uid,
+        "full_name": user.full_name,
+        "is_banned": user.is_banned
+    }
+
+@router.get("/users/{user_uid}/ban-status")
+def get_ban_status(
+    user_uid: str,
+    current_user: User = Depends(admin_only)
+):
+
+    from ..models import User
+    from ..utils.dependencies import _retry_get_or_none
+
+    user = _retry_get_or_none(User, uid=user_uid)
+
+    if not user:
+        raise HTTPException(
+            status_code=404,
+            detail="User not found"
+        )
+
+    return {
+        "uid": user.uid,
+        "full_name": user.full_name,
+        "is_banned": user.is_banned
+    }

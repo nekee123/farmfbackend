@@ -8,7 +8,13 @@ class OrderCreate(BaseModel):
     quantity: int = Field(..., gt=0)
     payment_method: str = Field(..., pattern="^(Cash on Delivery|Meet Up \/ Cash on Pick-up)$")
     buyer_address: str = Field(..., min_length=2)
+    deal_id: Optional[str] = None
 
+    # Optional frontend fields
+    buyer_name: Optional[str] = None
+    buyer_contact: Optional[str] = None
+    seller_uid: Optional[str] = None
+    total_price: Optional[float] = None
 class OrderStatusUpdate(BaseModel):
     order_status: str = Field(..., pattern="^(Pending|Confirmed|Cancelled|Delivered)$")
 
