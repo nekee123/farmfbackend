@@ -27,6 +27,7 @@ class User(StructuredNode):
     role = StringProperty(default=UserRole.BUYER.value, index=True)
     location = StringProperty(default="")
     profile_picture = StringProperty(default="")
+    category = StringProperty(default="")
     is_banned = BooleanProperty(default=False)
     created_at = DateTimeProperty(default_now=True)
     updated_at = DateTimeProperty(default_now=True)

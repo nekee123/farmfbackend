@@ -27,7 +27,8 @@ class AuthController:
             role=user_data.role.value,
             location=user_data.location or "",
             profile_picture=user_data.profile_picture or "",
-            is_banned=False
+            is_banned=False,
+            category=user_data.category or ""
         ).save()
         
         return UserResponse.from_orm(new_user)
@@ -41,7 +42,7 @@ class AuthController:
             phone_number=login_data.phone_number
         )
 
-    # Check credentials
+        # Check credentials
         if not user or not verify_password(
             login_data.password,
             user.password_hash
@@ -52,16 +53,16 @@ class AuthController:
                 headers={"WWW-Authenticate": "Bearer"},
             )
 
-    # =====================================
-    # CHECK IF USER IS BANNED
-    # =====================================
+        # =====================================
+        # CHECK IF USER IS BANNED
+        # =====================================
         if user.is_banned:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="Your account has been banned"
             )
 
-    # Create access token
+        # Create access token
         access_token = create_access_token(
             data={
                 "sub": user.uid,

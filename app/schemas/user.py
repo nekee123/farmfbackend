@@ -14,7 +14,7 @@ class UserBase(BaseModel):
 class UserCreate(UserBase):
     password: str = Field(..., min_length=6)
     role: UserRole = UserRole.BUYER
-
+    category: Optional[str] = ""
 
 class UserLogin(BaseModel):
     phone_number: str
