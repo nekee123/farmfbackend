@@ -112,22 +112,31 @@ def edit_review(review_uid: str, review: ReviewUpdate):
 @router.post("/", response_model=ReviewResponse)
 def submit_review(review: ReviewCreate):
     """Submit a review for a seller"""
+
     driver = get_db()
+
     with driver.session() as session:
+
         # Check if review already exists for this order
         check_query = """
         MATCH (r:Review {order_uid: $order_uid})
         RETURN r.uid AS uid
         """
-        existing = session.run(check_query, {"order_uid": review.order_uid})
+
+        existing = session.run(check_query, {
+            "order_uid": review.order_uid
+        })
+
         if existing.single():
-            raise HTTPException(status_code=400, detail="Review already submitted for this order")
-        
+            raise HTTPException(
+                status_code=400,
+                detail="Review already submitted for this order"
+            )
+
         review_uid = str(uuid.uuid4())
         now = datetime.utcnow().isoformat()
 
-        # Derive product info from the graph (best-effort).
-        # This prevents frontend parsing issues when these fields are missing.
+        # Get product info
         derive_query = """
         MATCH (o:Order {uid: $order_uid})
         OPTIONAL MATCH (o)-[:CONTAINS]->(p:FarmProduct)
@@ -135,19 +144,21 @@ def submit_review(review: ReviewCreate):
           p.uid AS product_uid,
           p.name AS product_name
         """
+
         derived = session.run(
             derive_query,
-            {"order_uid": review.order_uid},
+            {"order_uid": review.order_uid}
         ).single()
 
         derived_product_uid = None
         derived_product_name = None
+
         if derived:
             derived_product_uid = derived.get("product_uid")
             derived_product_name = derived.get("product_name")
 
         final_product_uid = derived_product_uid or review.product_uid
-        
+
         # Create review
         create_query = """
         CREATE (r:Review {
@@ -169,7 +180,7 @@ def submit_review(review: ReviewCreate):
                r.rating AS rating, r.comment AS comment,
                r.created_at AS created_at, r.updated_at AS updated_at
         """
-        
+
         result = session.run(create_query, {
             "uid": review_uid,
             "buyer_uid": review.buyer_uid,
@@ -183,32 +194,21 @@ def submit_review(review: ReviewCreate):
             "created_at": now,
             "updated_at": now,
         })
-        
+
         record = result.single()
-        
-        # Create notification for seller
-        notif_uid = str(uuid.uuid4())
-        notif_message = f"{review.buyer_name} left a {review.rating}-star review!"
-        
-        notif_query = """
-        CREATE (n:Notification {
-            uid: $uid,
-            recipient_uid: $seller_uid,
-            recipient_type: 'seller',
-            type: 'new_review',
-            message: $message,
-            read: false,
-            created_at: $created_at
-        })
-        """
-        
-        session.run(notif_query, {
-            "uid": notif_uid,
-            "seller_uid": review.seller_uid,
-            "message": notif_message,
-            "created_at": now
-        })
-        
+
+        # ================================
+        # FIXED NOTIFICATION (ONLY THIS)
+        # ================================
+        NotificationController.create_notification(
+            NotificationCreate(
+                recipient_uid=review.seller_uid,
+                sender_name=review.buyer_name,
+                product_name=derived_product_name,
+                type="new_review"
+            )
+        )
+
         return {
             "uid": record["uid"],
             "buyer_uid": record["buyer_uid"],
@@ -222,7 +222,6 @@ def submit_review(review: ReviewCreate):
             "created_at": record["created_at"],
             "updated_at": record.get("updated_at") or record["created_at"],
         }
-
 @router.get("/product/{product_uid}/summary")
 def get_product_rating_summary(product_uid: str):
     """Get rating summary for a specific product"""
