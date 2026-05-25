@@ -31,6 +31,82 @@ class ReviewResponse(BaseModel):
     comment: str
     created_at: str
     updated_at: str
+class ReviewUpdate(BaseModel):
+    rating: int
+    comment: Optional[str] = ""
+
+
+@router.put("/{review_uid}", response_model=ReviewResponse)
+def edit_review(review_uid: str, review: ReviewUpdate):
+    """Edit an existing review"""
+
+    driver = get_db()
+
+    with driver.session() as session:
+
+        # Check if review exists
+        check_query = """
+        MATCH (r:Review {uid: $review_uid})
+        RETURN r
+        """
+
+        existing = session.run(check_query, {
+            "review_uid": review_uid
+        }).single()
+
+        if not existing:
+            raise HTTPException(
+                status_code=404,
+                detail="Review not found"
+            )
+
+        now = datetime.utcnow().isoformat()
+
+        # Update review
+        update_query = """
+        MATCH (r:Review {uid: $review_uid})
+
+        SET
+            r.rating = $rating,
+            r.comment = $comment,
+            r.updated_at = $updated_at
+
+        RETURN
+            r.uid AS uid,
+            r.buyer_uid AS buyer_uid,
+            r.buyer_name AS buyer_name,
+            r.seller_uid AS seller_uid,
+            r.order_uid AS order_uid,
+            r.product_uid AS product_uid,
+            r.product_name AS product_name,
+            r.rating AS rating,
+            r.comment AS comment,
+            r.created_at AS created_at,
+            r.updated_at AS updated_at
+        """
+
+        result = session.run(update_query, {
+            "review_uid": review_uid,
+            "rating": review.rating,
+            "comment": review.comment,
+            "updated_at": now
+        })
+
+        record = result.single()
+
+        return {
+            "uid": record["uid"],
+            "buyer_uid": record["buyer_uid"],
+            "buyer_name": record["buyer_name"],
+            "seller_uid": record["seller_uid"],
+            "order_uid": record["order_uid"],
+            "product_uid": record.get("product_uid"),
+            "product_name": record.get("product_name"),
+            "rating": record["rating"],
+            "comment": record["comment"],
+            "created_at": record["created_at"],
+            "updated_at": record["updated_at"],
+        }
 
 # Submit review
 @router.post("/", response_model=ReviewResponse)
@@ -147,6 +223,92 @@ def submit_review(review: ReviewCreate):
             "updated_at": record.get("updated_at") or record["created_at"],
         }
 
+@router.get("/product/{product_uid}/summary")
+def get_product_rating_summary(product_uid: str):
+    """Get rating summary for a specific product"""
+
+    driver = get_db()
+
+    with driver.session() as session:
+
+        query = """
+        MATCH (r:Review {product_uid: $product_uid})
+
+        RETURN
+            avg(r.rating) AS average_rating,
+            count(r) AS total_reviews
+        """
+
+        result = session.run(query, {
+            "product_uid": product_uid
+        })
+
+        record = result.single()
+
+        if not record:
+            return {
+                "product_uid": product_uid,
+                "average_rating": 0,
+                "review_count": 0
+            }
+
+        return {
+            "product_uid": product_uid,
+            "average_rating": record["average_rating"] or 0,
+            "review_count": record["total_reviews"] or 0
+        }
+
+
+@router.get("/product/{product_uid}", response_model=List[ReviewResponse])
+def get_product_reviews(product_uid: str):
+    """Get all reviews for a specific product"""
+
+    driver = get_db()
+
+    with driver.session() as session:
+
+        query = """
+        MATCH (r:Review {product_uid: $product_uid})
+
+        RETURN
+            r.uid AS uid,
+            r.buyer_uid AS buyer_uid,
+            r.buyer_name AS buyer_name,
+            r.seller_uid AS seller_uid,
+            r.order_uid AS order_uid,
+            r.product_uid AS product_uid,
+            r.product_name AS product_name,
+            r.rating AS rating,
+            r.comment AS comment,
+            r.created_at AS created_at,
+            r.updated_at AS updated_at
+
+        ORDER BY r.created_at DESC
+        """
+
+        result = session.run(query, {
+            "product_uid": product_uid
+        })
+
+        reviews = []
+
+        for record in result:
+
+            reviews.append({
+                "uid": record["uid"],
+                "buyer_uid": record["buyer_uid"],
+                "buyer_name": record["buyer_name"],
+                "seller_uid": record["seller_uid"],
+                "order_uid": record["order_uid"],
+                "product_uid": record["product_uid"],
+                "product_name": record["product_name"],
+                "rating": record["rating"],
+                "comment": record["comment"],
+                "created_at": record["created_at"],
+                "updated_at": record.get("updated_at") or record["created_at"],
+            })
+
+        return reviews
 # Get reviews for a seller
 @router.get("/seller/{seller_uid}", response_model=List[ReviewResponse])
 def get_seller_reviews(seller_uid: str):
