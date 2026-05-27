@@ -9,7 +9,13 @@ class UserBase(BaseModel):
     full_name: str
     location: Optional[str] = None
     profile_picture: Optional[str] = None
+    
+class OTPVerify(BaseModel):
+    phone_number: str
+    otp: str
 
+class ResendOTP(BaseModel):
+    phone_number: str
 
 class UserCreate(UserBase):
     password: str = Field(..., min_length=6)

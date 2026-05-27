@@ -3,11 +3,53 @@ from ..models import User, UserRole
 from ..schemas import UserCreate, UserLogin, UserResponse, UserToken, UserUpdate
 from ..utils.security import get_password_hash, verify_password, create_access_token
 from ..utils.dependencies import _retry_get_or_none
-
-
+import random
+from datetime import datetime, timedelta
+from ..utils.sms import send_otp_sms
+from datetime import datetime, timedelta, timezone
 class AuthController:
     """Controller for unified authentication operations"""
-    
+
+    @staticmethod
+    def verify_otp(data):
+        user = _retry_get_or_none(
+            User,
+            phone_number=data.phone_number
+        )
+
+        if not user:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="User not found"
+            )
+
+        # check if already verified
+        if user.is_verified:
+            return {"message": "Account already verified"}
+
+        # check OTP match
+        if user.otp_code != data.otp:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Invalid OTP"
+            )
+
+        # check expiry (FIXED)
+        if not user.otp_expiry or datetime.now(timezone.utc) > user.otp_expiry:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="OTP expired"
+            )
+
+        # verify account
+        user.is_verified = True
+        user.otp_code = ""
+        user.otp_expiry = None
+        user.save()
+
+        return {
+            "message": "Account verified successfully"
+        }
     @staticmethod
     def register(user_data: UserCreate) -> UserResponse:
         """Register a new user (buyer, seller, or admin)"""
@@ -20,6 +62,7 @@ class AuthController:
             )
         
         # Create new user
+        # Create new user
         new_user = User(
             phone_number=user_data.phone_number,
             password_hash=get_password_hash(user_data.password),
@@ -28,10 +71,31 @@ class AuthController:
             location=user_data.location or "",
             profile_picture=user_data.profile_picture or "",
             is_banned=False,
-            category=user_data.category or ""
+            category=user_data.category or "",
+            is_verified=False
         ).save()
-        
+        # =========================
+        # GENERATE OTP
+        # =========================
+        otp_code = str(random.randint(100000, 999999))
+
+        # set expiry (5 minutes)
+        otp_expiry = datetime.utcnow() + timedelta(minutes=5)
+
+        # save OTP to user
+        new_user.otp_code = otp_code
+        new_user.otp_expiry = otp_expiry
+        new_user.save()
+        # =========================
+        # SEND SMS
+        # =========================
+        send_otp_sms(new_user.phone_number, otp_code)
+
+        # =========================
+        # RETURN RESPONSE
+        # =========================
         return UserResponse.from_orm(new_user)
+        
 
     @staticmethod
     def login(login_data: UserLogin) -> dict:
@@ -61,7 +125,12 @@ class AuthController:
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="Your account has been banned"
             )
-
+        # CHECK IF USER IS VERIFIED
+        if not user.is_verified:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Account not verified. Please verify OTP first."
+            )
         # Create access token
         access_token = create_access_token(
             data={
@@ -131,3 +200,47 @@ class AuthController:
         user.save()
         
         return UserResponse.from_orm(user)
+
+
+    @staticmethod
+    def resend_otp(data):
+        user = _retry_get_or_none(
+            User,
+            phone_number=data.phone_number
+        )
+
+        if not user:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="User not found"
+            )
+
+        # already verified users don't need OTP
+        if user.is_verified:
+            return {
+                "message": "Account already verified"
+            }
+
+        # OPTIONAL: prevent spam resend (cooldown)
+        if user.otp_expiry and datetime.now(timezone.utc) < user.otp_expiry:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="OTP is still valid. Please wait before requesting a new one."
+            )
+
+        # generate new OTP
+        otp_code = str(random.randint(100000, 999999))
+        otp_expiry = datetime.now(timezone.utc) + timedelta(minutes=5)
+
+        # update user
+        user.otp_code = otp_code
+        user.otp_expiry = otp_expiry
+        user.save()
+
+        # send SMS
+        send_otp_sms(user.phone_number, otp_code)
+
+        return {
+            "message": "OTP resent successfully",
+            "phone_number": user.phone_number
+        }

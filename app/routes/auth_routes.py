@@ -1,7 +1,9 @@
 from fastapi import APIRouter, status, Depends
 from ..schemas import UserCreate, UserLogin, UserResponse, UserToken, UserUpdate
 from ..controllers import AuthController
-
+from fastapi import APIRouter
+from app.utils.sms import send_otp_sms
+from app.schemas.user import OTPVerify, ResendOTP
 router = APIRouter(prefix="/api/auth", tags=["Authentication"])
 
 
@@ -27,3 +29,13 @@ def update_profile(user_data: UserUpdate):
     Update user profile
     """
     return AuthController.update_profile(user_data)
+
+
+
+@router.post("/verify-otp")
+def verify_otp(data: OTPVerify):
+    return AuthController.verify_otp(data)
+
+@router.post("/resend-otp")
+def resend_otp(data: ResendOTP):
+    return AuthController.resend_otp(data)
