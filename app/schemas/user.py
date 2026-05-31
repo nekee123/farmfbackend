@@ -2,7 +2,7 @@ from typing import Optional
 from pydantic import BaseModel, Field
 from datetime import datetime
 from ..models.user import UserRole
-
+from typing import List, Optional
 
 class UserBase(BaseModel):
     phone_number: str
@@ -20,7 +20,7 @@ class ResendOTP(BaseModel):
 class UserCreate(UserBase):
     password: str = Field(..., min_length=6)
     role: UserRole = UserRole.BUYER
-    category: Optional[str] = ""
+    category: Optional[List[str]] = []
 
 class UserLogin(BaseModel):
     phone_number: str

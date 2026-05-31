@@ -9,6 +9,7 @@ from neomodel import (
 )
 from datetime import datetime
 from enum import Enum
+from neomodel import ArrayProperty, StringProperty
 
 
 class UserRole(str, Enum):
@@ -27,7 +28,7 @@ class User(StructuredNode):
     role = StringProperty(default=UserRole.BUYER.value, index=True)
     location = StringProperty(default="")
     profile_picture = StringProperty(default="")
-    category = StringProperty(default="")
+    category = ArrayProperty(StringProperty(), default=[])
     is_banned = BooleanProperty(default=False)
     is_verified = BooleanProperty(default=False)
     otp_code = StringProperty(default="")

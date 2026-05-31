@@ -71,7 +71,7 @@ class AuthController:
             location=user_data.location or "",
             profile_picture=user_data.profile_picture or "",
             is_banned=False,
-            category=user_data.category or "",
+            category=user_data.category or [],
             is_verified=False
         ).save()
         # =========================
